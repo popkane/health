@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>헬스 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --fg:#1c1f24; --muted:#6b7280; --line:#e5e7eb; --accent:#2563eb; --accent2:#f59e0b; --accent3:#10b981; --good:#16a34a; --bad:#dc2626; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111317; --card:#1b1e24; --fg:#e8eaed; --muted:#9aa0a6; --line:#2d3139; --accent:#60a5fa; --accent2:#fbbf24; --accent3:#34d399; --good:#4ade80; --bad:#f87171; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+  main { max-width:1000px; margin:0 auto; padding:0 16px 32px; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); padding:12px 0 0; margin-bottom:12px; border-bottom:1px solid var(--line); }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+  h1 { font-size:19px; margin:0; }
+  nav { display:flex; gap:4px; }
+  nav button { width:auto; flex:1; padding:10px 8px; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; color:var(--muted); font-weight:600; cursor:pointer; }
+  nav button[aria-selected="true"] { color:var(--accent); border-bottom-color:var(--accent); }
+  h2 { font-size:15px; margin:0 0 12px; display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  h2 small { font-weight:400; color:var(--muted); font-size:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px; margin-bottom:12px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; }
+  .kpi .label { color:var(--muted); font-size:12px; display:flex; justify-content:space-between; gap:4px; }
+  .kpi .value { font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; line-height:1.3; }
+  .kpi .value small { font-size:13px; font-weight:400; }
+  .kpi .sub { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .badge { font-size:11px; padding:0 6px; border-radius:6px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  .up { color:var(--bad); } .down { color:var(--good); }
+  .charts { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px; }
+  .charts .card { margin:0; }
+  .chart { position:relative; height:200px; }
+  .chart[data-empty="1"]::after { content:'아직 데이터가 없습니다'; position:absolute; inset:0; display:grid; place-items:center; color:var(--muted); font-size:14px; }
+  form { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
+  form .full { grid-column:1 / -1; }
+  label { display:flex; flex-direction:column; font-size:12px; color:var(--muted); gap:4px; }
+  label.check { flex-direction:row; align-items:center; gap:8px; font-size:14px; color:var(--fg); }
+  label.check input { width:auto; }
+  input, select, button { font:inherit; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); width:100%; min-width:0; }
+  button.primary { background:var(--accent); color:#fff; border:0; font-weight:600; cursor:pointer; }
+  button.primary:disabled { opacity:.6; }
+  .hint { font-size:13px; color:var(--muted); min-height:1.2em; }
+  select.range { width:auto; padding:6px 8px; font-size:13px; }
+  .tools { display:flex; gap:6px; align-items:center; }
+  .refresh { width:auto; padding:4px 10px; font-size:18px; line-height:1.2; cursor:pointer; }
+  .refresh.spin { animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .synced { font-size:11px; color:var(--muted); }
+  ul.list { list-style:none; margin:0; padding:0; }
+  ul.list li { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:9px 0; border-top:1px solid var(--line); }
+  ul.list li:first-child { border-top:0; }
+  ul.list li.day { color:var(--muted); font-size:12px; font-weight:600; padding-top:14px; border-top:0; }
+  .meta { color:var(--muted); font-size:13px; }
+  .del { width:auto; padding:4px 10px; font-size:13px; color:var(--bad); background:transparent; cursor:pointer; flex-shrink:0; }
+  .empty { color:var(--muted); font-size:14px; }
+  .note { color:var(--muted); font-size:12px; margin:12px 0 0; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chips button { width:auto; padding:6px 10px; font-size:13px; cursor:pointer; }
+  .chips small { color:var(--muted); }
+  .login { position:fixed; inset:0; z-index:20; background:var(--bg); display:grid; place-items:center; padding:16px; }
+  .login[hidden] { display:none; }
+  .login .card { width:100%; max-width:360px; }
+  #toast { position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); background:var(--fg); color:var(--bg); padding:8px 14px; border-radius:8px; font-size:14px; z-index:10; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="top">
+      <h1>헬스 대시보드</h1>
+      <div class="tools">
+      <button class="refresh" id="refresh" title="새로고침" aria-label="새로고침">⟳</button>
+      <select class="range" id="range">
+        <option value="14">2주</option>
+        <option value="30" selected>30일</option>
+        <option value="90">90일</option>
+        <option value="365">1년</option>
+      </select>
+      </div>
+    </div>
+    <nav role="tablist">
+      <button role="tab" data-tab="dash" aria-selected="true">대시보드</button>
+      <button role="tab" data-tab="work" aria-selected="false">운동</button>
+      <button role="tab" data-tab="body" aria-selected="false">실측 입력</button>
+      <button role="tab" data-tab="goal" aria-selected="false">목표</button>
+    </nav>
+  </header>
+
+  <!-- 대시보드 -->
+  <section id="tab-dash">
+    <div class="kpis" id="kpis"></div>
+    <div class="charts">
+      <section class="card"><h2>체중 <small id="gW"></small></h2><div class="chart"><canvas id="cWeight"></canvas></div></section>
+      <section class="card"><h2>골격근량 <small id="gM"></small></h2><div class="chart"><canvas id="cMuscle"></canvas></div></section>
+      <section class="card"><h2>체지방률 <small id="gF"></small></h2><div class="chart"><canvas id="cFatPct"></canvas></div></section>
+      <section class="card"><h2>체지방량</h2><div class="chart"><canvas id="cFatMass"></canvas></div></section>
+      <section class="card"><h2>체수분</h2><div class="chart"><canvas id="cWater"></canvas></div></section>
+      <section class="card"><h2>BMI</h2><div class="chart"><canvas id="cBmi"></canvas></div></section>
+      <section class="card"><h2>기초대사량</h2><div class="chart"><canvas id="cBmr"></canvas></div></section>
+      <section class="card"><h2>섭취 · 소모 칼로리 <small>소모 = 기초대사 + 활동</small></h2><div class="chart"><canvas id="cKcal"></canvas></div></section>
+      <section class="card"><h2>탄수화물 · 단백질 · 지방 (g)</h2><div class="chart"><canvas id="cMacro"></canvas></div></section>
+      <section class="card"><h2>운동 볼륨 <small>중량×횟수 합계</small></h2><div class="chart"><canvas id="cVol"></canvas></div></section>
+      <section class="card" id="seriesCard"><h2 id="seriesTitle">측정 기록</h2><div class="chart"><canvas id="cSeries"></canvas></div></section>
+    </div>
+    <p class="note">● 입력·실측값 &nbsp; ◆ 삼성헬스로 채운 값 &nbsp; ○ 점선: 추정값 (골격근·체수분 = 내 실측 비율 × 제지방량, 소모 칼로리 = 내 입력 비율 × 기초대사량)</p>
+  </section>
+
+  <!-- 운동 -->
+  <section id="tab-work" hidden>
+    <section class="card">
+      <h2>운동 기록하기 <small>웰니스 아카이브 › 운동기록 탭에 저장</small></h2>
+      <form id="wf">
+        <label>날짜<input type="date" name="date" required></label>
+        <label>기구<input name="ename" list="equip" placeholder="예: 레그프레스(원판)" autocomplete="off" required></label>
+        <label class="check full"><input type="checkbox" name="cardio" id="cardio"> 유산소 (세트 없이 시간·거리 기록)</label>
+        <label data-mode="set">중량(kg)<input type="number" name="weight" inputmode="decimal" step="0.5"></label>
+        <label data-mode="set">횟수<input type="number" name="reps" inputmode="numeric" min="0"></label>
+        <label data-mode="set">여유횟수(RIR)<input type="number" name="rir" inputmode="numeric" min="0"></label>
+        <label data-mode="set">휴식(초)<input type="number" name="rest" inputmode="numeric" min="0" step="10"></label>
+        <label data-mode="cardio" hidden>시간(분)<input type="number" name="cmin" inputmode="numeric" min="0"></label>
+        <label data-mode="cardio" hidden>거리(km)<input type="number" name="ckm" inputmode="decimal" step="0.01" min="0"></label>
+        <label data-mode="cardio" hidden>평균심박<input type="number" name="chr" inputmode="numeric" min="0"></label>
+        <label class="full">특이사항<input name="note"></label>
+        <div class="hint full" id="hint"></div>
+        <button class="primary full" id="wsubmit">저장</button>
+      </form>
+      <datalist id="equip"></datalist>
+    </section>
+    <section class="card">
+      <h2>최근 운동</h2>
+      <ul class="list" id="wlist"></ul>
+    </section>
+  </section>
+
+  <!-- 골격근량·체수분 -->
+  <section id="tab-body" hidden>
+    <section class="card">
+      <h2>실측값 입력 <small>입력하지 않은 날은 추정값으로 채워집니다</small></h2>
+      <form id="mf">
+        <label class="full">날짜<input type="date" name="date" required></label>
+        <label>골격근량(kg)<input type="number" name="muscle" inputmode="decimal" step="0.1" min="0"></label>
+        <label>체수분(kg)<input type="number" name="water" inputmode="decimal" step="0.1" min="0"></label>
+        <label class="full">총 소모 칼로리(kcal)<input type="number" name="burn" inputmode="numeric" step="1" min="0"></label>
+        <div class="hint full" id="mhint"></div>
+        <button class="primary full" id="msubmit">저장</button>
+      </form>
+    </section>
+    <section class="card">
+      <h2>입력 안 된 날 <small>추정값으로 채워진 날 · 누르면 위에서 바로 입력</small></h2>
+      <div id="missing" class="chips"></div>
+    </section>
+    <section class="card">
+      <h2>입력한 실측값</h2>
+      <ul class="list" id="mlist"></ul>
+    </section>
+  </section>
+
+  <!-- 목표 -->
+  <section id="tab-goal" hidden>
+    <section class="card">
+      <h2>진행 상황 <small id="gdday"></small></h2>
+      <div class="kpis" id="gprog" style="margin:0"></div>
+    </section>
+    <section class="card">
+      <h2>목표 설정 <small>저장하면 대시보드 목표선에 바로 반영됩니다</small></h2>
+      <form id="gf">
+        <label class="full">기한<input type="date" name="deadline"></label>
+        <label>몸무게(kg)<input type="number" name="weight" inputmode="decimal" step="0.1" min="0"></label>
+        <label>체지방률(%)<input type="number" name="fatPct" inputmode="decimal" step="0.1" min="0" max="100"></label>
+        <label>골격근량(kg)<input type="number" name="muscle" inputmode="decimal" step="0.1" min="0"></label>
+        <div class="hint full" id="ghint">비워 둔 항목은 목표 없음으로 저장됩니다.</div>
+        <button class="primary full" id="gsubmit">저장</button>
+      </form>
+    </section>
+    <section class="card">
+      <h2>목표 변경 기록</h2>
+      <ul class="list" id="glist"></ul>
+    </section>
+  </section>
+</main>
+<div id="toast" hidden></div>
+<form id="login" class="login" hidden>
+  <div class="card">
+    <h2>비밀키 입력</h2>
+    <p class="meta" style="margin:0 0 12px">처음 한 번만 입력하면 이 기기에 저장됩니다.</p>
+    <input name="key" type="password" autocomplete="current-password" required>
+    <button class="primary" style="margin-top:8px">확인</button>
+  </div>
+</form>
+
+<script>
+// 데이터는 Apps Script(JSON API)에서 받는다. 비밀키는 코드에 넣지 않고
+// 주소의 ?k=... 로 한 번 들어오거나 직접 입력하면 이 기기에만 저장한다.
+const API = 'https://script.google.com/macros/s/AKfycbyiYX-BwYiOZfnvNk56Dn9qJ6MoxRRe8V6XgmhhnXdpp45T4sZGHeJBYOTbHLEFQMmc/exec';
+let KEY = new URLSearchParams(location.search).get('k');
+try {
+  if (KEY) localStorage.setItem('key', KEY);
+  else KEY = localStorage.getItem('key');
+} catch (e) {}
+// 주소창·방문 기록에 키가 남지 않도록 지운다
+if (location.search) history.replaceState(null, '', location.pathname);
+const $ = s => document.querySelector(s);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const charts = {};
+let D = null;
+
+async function call(fn, ...args) {
+  if (!KEY) { askKey(); throw new Error('비밀키가 필요합니다'); }
+  const q = new URLSearchParams({ fn, k: KEY, a: JSON.stringify(args) });
+  const r = await fetch(`${API}?${q}`, { cache: 'no-store' }).then(x => x.json());
+  if (!r.ok) {
+    if (r.error === 'unauthorized') { askKey(); throw new Error('비밀키가 맞지 않습니다'); }
+    throw new Error(r.error);
+  }
+  return r.data;
+}
+function askKey() {
+  try { localStorage.removeItem('key'); } catch (e) {}
+  KEY = null;
+  $('#login').hidden = false;
+}
+$('#login').addEventListener('submit', e => {
+  e.preventDefault();
+  KEY = e.target.key.value.trim();
+  try { localStorage.setItem('key', KEY); } catch (err) {}
+  $('#login').hidden = true;
+  load();
+});
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 2200);
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+const md = d => d.slice(5).replace('-', '/');
+const r1 = v => (v == null ? null : Math.round(v * 10) / 10);
+const sign = v => (v > 0 ? '+' : '') + v;
+function localToday() {
+  const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+// ---------- 탭 ----------
+const TABS = ['dash', 'work', 'body', 'goal'];
+function showTab(name) {
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  TABS.forEach(t => { $('#tab-' + t).hidden = t !== name; });
+  try { localStorage.setItem('tab', name); } catch (e) {}
+  if (name === 'dash' && D) Object.values(charts).forEach(c => c.resize());
+}
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+let loadedAt = 0;
+async function load(manual) {
+  const btn = $('#refresh');
+  btn.classList.add('spin'); btn.disabled = true;
+  try {
+    D = await call('getDashboard', Number($('#range').value));
+    loadedAt = Date.now();
+    render();
+    if (manual) toast('최신 데이터로 업데이트했습니다');
+  } catch (e) { toast('불러오기 실패: ' + e.message); }
+  btn.classList.remove('spin'); btn.disabled = false;
+}
+$('#refresh').addEventListener('click', () => load(true));
+// 다른 앱에 갔다가 돌아오면 1분 이상 지났을 때 자동으로 다시 불러온다
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - loadedAt > 60e3) load();
+});
+
+// ---------- 대시보드 ----------
+function lastOf(key) {
+  for (let i = D.body.length - 1; i >= 0; i--) if (D.body[i][key] != null) return D.body[i];
+  return null;
+}
+function firstOf(key) { return D.body.find(r => r[key] != null) || null; }
+
+function tag(row, key) {
+  if (row.est && row.est.includes(key)) return '<span class="badge">추정</span>';
+  if (row.filled && row.filled.includes(key)) return '<span class="badge">삼성헬스</span>';
+  return '';
+}
+
+function kpi(label, key, unit, opt = {}) {
+  const l = lastOf(key), f = firstOf(key);
+  if (!l) return `<div class="kpi"><div class="label">${label}</div><div class="value">–</div></div>`;
+  const val = opt.int ? Math.round(l[key]) : l[key];
+  const diff = opt.int ? Math.round(l[key] - f[key]) : r1(l[key] - f[key]);
+  const cls = !diff || opt.lowerIsBetter == null ? '' : ((diff > 0) === opt.lowerIsBetter ? 'up' : 'down');
+  let sub = `<span class="${cls}">기간 ${sign(diff)}</span>`;
+  if (opt.goal != null) sub += ` · 목표 ${opt.goal}${unit} (${sign(r1(opt.goal - l[key]))})`;
+  return `<div class="kpi"><div class="label"><span>${label} · ${md(l.date)}</span>${tag(l, key)}</div>
+    <div class="value">${val}<small> ${unit}</small></div><div class="sub">${sub}</div></div>`;
+}
+
+// 총 소모 칼로리 출처
+function burnParts(r) {
+  return r.est.includes('burn') ? `추정 (기초대사 ${r.bmrRef} × 내 평균 비율)` : '입력값';
+}
+
+function chart(id, labels, sets, opts = {}) {
+  if (charts[id]) charts[id].destroy();
+  const has = sets.some(s => !s.goal && s.data.some(v => v != null));
+  document.getElementById(id).parentElement.dataset.empty = has ? '' : '1';
+  const tick = css('--muted');
+  charts[id] = new Chart(document.getElementById(id), {
+    type: opts.type || 'line',
+    data: { labels, datasets: sets },
+    options: {
+      maintainAspectRatio: false, spanGaps: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: sets.length > 1, labels: { color: tick, boxWidth: 12 } },
+        tooltip: { callbacks: { footer: opts.footer } },
+      },
+      scales: {
+        x: { stacked: !!opts.stacked, ticks: { color: tick, maxTicksLimit: 8 }, grid: { display: false } },
+        y: { stacked: !!opts.stacked, ticks: { color: tick }, grid: { color: css('--line') }, suggestedMin: opts.min, suggestedMax: opts.max },
+      },
+    },
+  });
+}
+
+// ● 아카이브·실측, ◆ 삼성헬스로 채움, ○+점선 추정
+function line(label, key, color) {
+  const rows = D.body, card = css('--card');
+  const isEst = i => rows[i] && rows[i].est && rows[i].est.includes(key);
+  const isFill = i => rows[i] && rows[i].filled && rows[i].filled.includes(key);
+  return {
+    label, data: rows.map(r => r[key]), borderColor: color, backgroundColor: color, tension: .3,
+    pointRadius: rows.map((r, i) => (isFill(i) ? 4 : 2.5)),
+    pointStyle: rows.map((r, i) => (isFill(i) ? 'rectRot' : 'circle')),
+    pointBackgroundColor: rows.map((r, i) => (isEst(i) ? card : color)),
+    segment: { borderDash: ctx => (isEst(ctx.p1DataIndex) || isEst(ctx.p0DataIndex) ? [4, 3] : undefined) },
+  };
+}
+function goalLine(value, n) {
+  return { label: '목표', goal: true, data: Array(n).fill(value), borderColor: css('--muted'), borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 };
+}
+const footer = key => items => {
+  const r = D.body[items[0].dataIndex];
+  if (!r) return '';
+  if (r.est && r.est.includes(key)) return '○ 추정값';
+  if (r.filled && (key ? r.filled.includes(key) : r.filled.length)) return '◆ 삼성헬스 값';
+  return '';
+};
+
+function render() {
+  const g = D.goals || {};
+  const a = css('--accent'), b = css('--accent2'), c = css('--accent3');
+
+  const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const week = D.workoutDays.filter(d => d.date > weekAgo);
+  const k = lastOf('intake'), mac = lastOf('carb'), bn = lastOf('burn');
+  // 칼로리 수지: 오늘(진행 중)은 빼고 최근 7일 중 섭취·소모가 둘 다 있는 날의 평균
+  const bal = D.body.filter(r => r.date > weekAgo && r.date < D.today && r.intake != null && r.burn != null);
+  const avgBal = bal.length ? Math.round(bal.reduce((s, r) => s + r.intake - r.burn, 0) / bal.length) : null;
+  const balEst = bal.filter(r => r.est.includes('burn')).length;
+  $('#kpis').innerHTML =
+    kpi('체중', 'weight', 'kg', { goal: g.weight, lowerIsBetter: true }) +
+    kpi('골격근량', 'muscle', 'kg', { goal: g.muscle, lowerIsBetter: false }) +
+    kpi('체지방률', 'fatPct', '%', { goal: g.fatPct, lowerIsBetter: true }) +
+    kpi('체지방량', 'fatMass', 'kg', { lowerIsBetter: true }) +
+    kpi('체수분', 'water', 'kg', {}) +
+    kpi('BMI', 'bmi', '', { lowerIsBetter: true }) +
+    kpi('기초대사량', 'bmr', 'kcal', { int: true }) +
+    `<div class="kpi"><div class="label"><span>섭취 칼로리${k ? ' · ' + md(k.date) : ''}</span>${k ? tag(k, 'intake') : ''}</div>
+      <div class="value">${k ? Math.round(k.intake) : '–'}<small> kcal</small></div>
+      <div class="sub">${k && k.burn ? `소모 ${k.burn}${k.est.includes('burn') ? '(추정)' : ''} · 차이 ${sign(Math.round(k.intake - k.burn))}${k.date === D.today ? ' (진행 중)' : ''}` : ''}</div></div>` +
+    `<div class="kpi"><div class="label"><span>소모 칼로리${bn ? ' · ' + md(bn.date) : ''}</span>${bn ? tag(bn, 'burn') : ''}</div>
+      <div class="value">${bn ? bn.burn : '–'}<small> kcal</small></div>
+      <div class="sub">${bn ? burnParts(bn) : ''}</div></div>` +
+    `<div class="kpi"><div class="label"><span>칼로리 수지 · 7일 평균</span></div>
+      <div class="value ${avgBal == null ? '' : avgBal < 0 ? 'down' : 'up'}">${avgBal == null ? '–' : sign(avgBal)}<small> kcal/일</small></div>
+      <div class="sub">${avgBal == null ? '섭취·소모 기록 필요' : `${avgBal < 0 ? '적자' : '흑자'} · ${bal.length}일 기준${balEst ? `(추정 ${balEst}일)` : ''} ·주 ${sign(r1(avgBal * 7 / 7700))}kg 예상`}</div></div>` +
+    `<div class="kpi"><div class="label"><span>탄 · 단 · 지${mac ? ' · ' + md(mac.date) : ''}</span></div>
+      <div class="value" style="font-size:18px">${mac ? `${Math.round(mac.carb)} · ${Math.round(mac.protein ?? 0)} · ${Math.round(mac.fat ?? 0)}` : '–'}<small> g</small></div></div>` +
+    `<div class="kpi"><div class="label"><span>최근 7일 운동</span></div><div class="value">${week.length}<small> 일</small></div>
+      <div class="sub">${week.reduce((s, d) => s + d.sets, 0)}세트</div></div>`;
+
+  const L = D.body.map(r => md(r.date)), n = L.length;
+  const dd = g.deadline ? ' · ' + dday(g.deadline) : '';
+  $('#gW').textContent = g.weight ? `목표 ${g.weight}kg${dd}` : '';
+  $('#gM').textContent = g.muscle ? `목표 ${g.muscle}kg${dd}` : '';
+  $('#gF').textContent = g.fatPct ? `목표 ${g.fatPct}%${dd}` : '';
+  const withGoal = (set, v) => (v != null ? [set, goalLine(v, n)] : [set]);
+
+  chart('cWeight', L, withGoal(line('체중(kg)', 'weight', a), g.weight), { footer: footer('weight'), min: g.weight });
+  chart('cMuscle', L, withGoal(line('골격근량(kg)', 'muscle', a), g.muscle), { footer: footer('muscle'), max: g.muscle });
+  chart('cFatPct', L, withGoal(line('체지방률(%)', 'fatPct', b), g.fatPct), { footer: footer('fatPct'), min: g.fatPct });
+  chart('cFatMass', L, [line('체지방량(kg)', 'fatMass', b)], { footer: footer('fatPct') });
+  chart('cWater', L, [line('체수분(kg)', 'water', a)], { footer: footer('water') });
+  chart('cBmi', L, [line('BMI', 'bmi', a)], { footer: footer('weight') });
+  chart('cBmr', L, [line('기초대사량(kcal)', 'bmr', c)], { footer: footer('bmr') });
+  chart('cKcal', L, [
+    { label: '섭취', type: 'bar', data: D.body.map(r => r.intake), backgroundColor: a, borderRadius: 3 },
+    Object.assign(line('총 소모', 'burn', b), { type: 'line' }),
+  ], {
+    type: 'bar',
+    footer: items => {
+      const r = D.body[items[0].dataIndex];
+      if (!r) return '';
+      const out = [];
+      if (r.burn != null) out.push(burnParts(r));
+      if (r.intake != null && r.burn != null) out.push(`수지 ${sign(Math.round(r.intake - r.burn))} kcal${r.date === D.today ? ' (진행 중)' : ''}`);
+      return out.filter(Boolean).join('\n');
+    },
+  });
+  chart('cMacro', L, [
+    { label: '탄수화물', data: D.body.map(r => r.carb), backgroundColor: a },
+    { label: '단백질', data: D.body.map(r => r.protein), backgroundColor: c },
+    { label: '지방', data: D.body.map(r => r.fat), backgroundColor: b },
+  ], { type: 'bar', stacked: true, footer: footer('carb') });
+
+  const W = D.workoutDays;
+  chart('cVol', W.map(d => md(d.date)), [{ label: '볼륨(kg)', data: W.map(d => Math.round(d.volume)), backgroundColor: c, borderRadius: 3 }], {
+    type: 'bar',
+    footer: items => { const d = W[items[0].dataIndex]; return `${d.sets}세트${d.cardio ? ` · 유산소 ${d.cardio}분` : ''}`; },
+  });
+
+  const s = (D.series || []).find(x => x.rows.length) || (D.series || [])[0];
+  $('#seriesCard').hidden = !s;
+  if (s) {
+    $('#seriesTitle').textContent = s.label;
+    const unit = (s.rows[0] && s.rows[0].unit) || '';
+    chart('cSeries', s.rows.map(r => md(r.date)), [{ label: `${s.label}${unit ? `(${unit})` : ''}`, data: s.rows.map(r => r.value), borderColor: a, backgroundColor: a, tension: .3, pointRadius: 3 }]);
+  }
+
+  $('#equip').innerHTML = D.equipment.map(e => `<option value="${esc(e.name)}">`).join('');
+  renderWorkouts();
+  updateHint();
+  renderMeasures();
+  updateMHint();
+  renderGoal();
+}
+
+// ---------- 운동 ----------
+function renderWorkouts() {
+  if (!D.workouts.length) { $('#wlist').innerHTML = '<li class="empty">이 기간에 운동 기록이 없습니다.</li>'; return; }
+  let prev = '', html = '';
+  D.workouts.slice(0, 60).forEach((w, i) => {
+    if (w.date !== prev) { html += `<li class="day">${w.date.replace(/-/g, '.')}</li>`; prev = w.date; }
+    const parts = w.setLabel
+      ? [w.setLabel, w.weight != null && `${w.weight}kg`, w.reps != null && `${w.reps}회`, w.rir != null && `RIR ${w.rir}`, w.rest != null && `휴식 ${w.rest}초`]
+      : ['유산소'];
+    html += `<li><div><div>${esc(w.name)}</div><div class="meta">${esc(parts.filter(Boolean).join(' · '))}${w.note ? ' · ' + esc(w.note) : ''}</div></div>
+      <button class="del" data-i="${i}">삭제</button></li>`;
+  });
+  $('#wlist').innerHTML = html;
+}
+
+// 기구를 고르면 지난번 기록으로 칸을 채우고, 오늘 몇 번째 세트인지 보여준다
+function updateHint() {
+  if (!D) return;
+  const f = $('#wf'), name = f.ename.value.trim();
+  const e = D.equipment.find(x => x.name === name);
+  const cardio = f.cardio.checked;
+  const cnt = (D.todayCount[name] || 0) + 1;
+  let txt = '';
+  if (name && !cardio) txt = `오늘 ${cnt}세트째`;
+  if (e && e.date) txt += `${txt ? ' · ' : ''}지난 기록 ${md(e.date)}${e.weight != null ? ` ${e.weight}kg` : ''}${e.reps != null ? ` × ${e.reps}회` : ''}`;
+  $('#hint').textContent = txt;
+  $('#wsubmit').textContent = name && !cardio ? `${cnt}세트 저장` : '저장';
+}
+
+function setMode(cardio) {
+  document.querySelectorAll('[data-mode]').forEach(el => { el.hidden = (el.dataset.mode === 'cardio') !== cardio; });
+  updateHint();
+}
+
+$('#wf').ename.addEventListener('change', () => {
+  const f = $('#wf'), e = D && D.equipment.find(x => x.name === f.ename.value.trim());
+  if (e) {
+    f.cardio.checked = !!e.cardio; setMode(!!e.cardio);
+    if (!e.cardio) { f.weight.value = e.weight ?? ''; f.reps.value = e.reps ?? ''; f.rir.value = e.rir ?? ''; f.rest.value = e.rest ?? ''; }
+  }
+  updateHint();
+});
+$('#wf').ename.addEventListener('input', updateHint);
+$('#cardio').addEventListener('change', e => setMode(e.target.checked));
+
+$('#wf').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target, btn = $('#wsubmit');
+  const w = {
+    date: f.date.value, name: f.ename.value.trim(), cardio: f.cardio.checked,
+    weight: f.weight.value, reps: f.reps.value, rir: f.rir.value, rest: f.rest.value, note: f.note.value.trim(),
+  };
+  if (w.cardio) {
+    w.weight = w.reps = w.rir = w.rest = '';
+    const c = `${f.cmin.value ? f.cmin.value + '분' : ''}${f.ckm.value ? f.ckm.value + '키로' : ''}${f.chr.value ? ' 평균심박' + f.chr.value : ''}`.trim();
+    w.note = [c, w.note].filter(Boolean).join(' ');
+  }
+  btn.disabled = true;
+  try {
+    const r = await call('addWorkout', w);
+    toast(`${w.name} ${r.setLabel || ''} 저장했습니다`);
+    // 같은 기구 다음 세트를 바로 입력할 수 있게 기구·중량·횟수는 남겨둔다
+    f.note.value = ''; f.cmin.value = ''; f.ckm.value = ''; f.chr.value = ''; f.rir.value = '';
+    await load();
+  } catch (err) { toast('저장 실패: ' + err.message); }
+  btn.disabled = false;
+});
+
+$('#wlist').addEventListener('click', async e => {
+  const btn = e.target.closest('.del'); if (!btn) return;
+  if (btn.dataset.confirm !== '1') { btn.dataset.confirm = '1'; btn.textContent = '정말 삭제'; return; }
+  const w = D.workouts[Number(btn.dataset.i)];
+  btn.disabled = true;
+  try {
+    await call('deleteWorkout', { row: w.row, date: w.date, name: w.name, setLabel: w.setLabel });
+    toast('삭제했습니다'); await load();
+  } catch (err) { toast('삭제 실패: ' + err.message); btn.disabled = false; }
+});
+
+// ---------- 실측 입력 (골격근량·체수분·총 소모 칼로리) ----------
+function renderMeasures() {
+  $('#mlist').innerHTML = D.measures.length ? D.measures.map(m => `<li>
+      <div><div>${m.date.replace(/-/g, '.')}</div>
+      <div class="meta">${[m.muscle != null && `골격근 ${m.muscle}kg`, m.water != null && `체수분 ${m.water}kg`, m.burn != null && `소모 ${m.burn}kcal`].filter(Boolean).join(' · ')}</div></div>
+      <button class="del" data-date="${m.date}">삭제</button></li>`).join('')
+    : '<li class="empty">아직 입력한 값이 없습니다. 지금까지는 아카이브 기록으로 추정합니다.</li>';
+
+  // 골격근·체수분·소모 중 추정값이 있는 날 (최근 순)
+  const names = { muscle: '골격근', water: '체수분', burn: '소모' };
+  const miss = D.body.filter(r => r.est.length).reverse();
+  $('#missing').innerHTML = miss.length
+    ? miss.map(r => `<button type="button" data-date="${r.date}">${md(r.date)} <small>${r.est.map(k => names[k]).join('·')}</small></button>`).join('')
+    : '<span class="empty">이 기간에는 모두 입력되어 있습니다.</span>';
+}
+
+$('#missing').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const f = $('#mf');
+  f.date.value = b.dataset.date;
+  updateMHint();
+  f.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  f.burn.focus({ preventScroll: true });
+});
+
+// 날짜를 고르면 그날 값(실측/추정)을 보여주고, 웹에서 입력했던 값이면 칸에 채운다
+function updateMHint() {
+  if (!D) return;
+  const f = $('#mf'), d = f.date.value;
+  const m = D.measures.find(x => x.date === d);
+  f.muscle.value = m && m.muscle != null ? m.muscle : '';
+  f.water.value = m && m.water != null ? m.water : '';
+  f.burn.value = m && m.burn != null ? m.burn : '';
+  const r = D.body.find(x => x.date === d);
+  let txt = '';
+  if (r && (r.muscle != null || r.water != null || r.burn != null)) {
+    const show = (k, lbl, unit) => (r[k] == null ? '' : `${lbl} ${r[k]}${unit}${r.est.includes(k) ? '(추정)' : ''}`);
+    txt = `이날 현재 값: ${[show('muscle', '골격근', 'kg'), show('water', '체수분', 'kg'), show('burn', '소모', 'kcal')].filter(Boolean).join(' · ')}`;
+  } else if (r === undefined) {
+    txt = '이날은 기록이 없거나 선택한 기간 밖입니다.';
+  }
+  if (m) txt = '웹에서 입력한 값을 수정합니다. ' + txt;
+  $('#mhint').textContent = txt;
+  $('#msubmit').textContent = m ? '수정' : '저장';
+}
+$('#mf').date.addEventListener('change', updateMHint);
+
+$('#mf').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target, btn = $('#msubmit');
+  btn.disabled = true;
+  try {
+    await call('saveMeasure', { date: f.date.value, muscle: f.muscle.value, water: f.water.value, burn: f.burn.value });
+    toast('저장했습니다');
+    await load();
+  } catch (err) { toast('저장 실패: ' + err.message); }
+  btn.disabled = false;
+});
+
+$('#mlist').addEventListener('click', async e => {
+  const btn = e.target.closest('.del'); if (!btn) return;
+  if (btn.dataset.confirm !== '1') { btn.dataset.confirm = '1'; btn.textContent = '정말 삭제'; return; }
+  btn.disabled = true;
+  try { await call('deleteMeasure', btn.dataset.date); toast('삭제했습니다'); await load(); }
+  catch (err) { toast('삭제 실패: ' + err.message); btn.disabled = false; }
+});
+
+// ---------- 목표 ----------
+function dday(deadline) {
+  const n = Math.round((new Date(deadline) - new Date(localToday())) / 864e5);
+  return n > 0 ? `D-${n}` : n === 0 ? 'D-day' : `D+${-n}`;
+}
+
+let goalFormFilled = false;
+function renderGoal() {
+  const g = D.goals || {};
+  $('#gdday').textContent = g.deadline ? `${g.deadline.replace(/-/g, '.')}까지 · ${dday(g.deadline)}` : '기한 없음';
+  const weeks = g.deadline ? (new Date(g.deadline) - new Date(localToday())) / (7 * 864e5) : 0;
+  const item = (label, key, unit, lowerIsBetter) => {
+    const goal = g[key];
+    if (goal == null) return '';
+    const l = lastOf(key);
+    if (!l) return `<div class="kpi"><div class="label"><span>${label}</span></div><div class="value">–<small> → ${goal}${unit}</small></div><div class="sub">이 기간에 기록 없음</div></div>`;
+    const left = r1(goal - l[key]);
+    const done = lowerIsBetter ? left >= 0 : left <= 0;
+    let sub = done ? '<span class="down">달성</span>' : `남은 양 ${sign(left)}${unit}`;
+    if (!done && weeks > 0) sub += ` · 주당 ${sign(r1(left / weeks))}${unit}`;
+    return `<div class="kpi"><div class="label"><span>${label} · ${md(l.date)}</span>${tag(l, key)}</div>
+      <div class="value">${l[key]}<small> → ${goal}${unit}</small></div><div class="sub">${sub}</div></div>`;
+  };
+  $('#gprog').innerHTML = item('몸무게', 'weight', 'kg', true) + item('체지방률', 'fatPct', '%', true) + item('골격근량', 'muscle', 'kg', false)
+    || '<p class="empty">아직 설정한 목표가 없습니다.</p>';
+
+  // 입력 중에 자동 새로고침으로 칸이 바뀌지 않도록 처음 한 번(또는 저장 후)만 채운다
+  if (!goalFormFilled) {
+    const f = $('#gf');
+    f.deadline.value = g.deadline || '';
+    ['weight', 'fatPct', 'muscle'].forEach(k => { f[k].value = g[k] ?? ''; });
+    goalFormFilled = true;
+  }
+
+  const H = D.goalHistory || [];
+  const fmt = h => [h.weight != null && `몸무게 ${h.weight}kg`, h.fatPct != null && `체지방률 ${h.fatPct}%`, h.muscle != null && `골격근 ${h.muscle}kg`].filter(Boolean).join(' · ');
+  $('#glist').innerHTML = H.length ? H.map((h, i) => `<li>
+      <div><div>${h.date.replace(/-/g, '.')} 설정${i === 0 ? ' <span class="badge">현재</span>' : ''}</div>
+      <div class="meta">${fmt(h)}${h.deadline ? ` · 기한 ${h.deadline.replace(/-/g, '.')}` : ''}</div></div>
+      <button class="del" data-date="${h.date}">삭제</button></li>`).join('')
+    : '<li class="empty">아직 웹에서 설정한 목표가 없습니다.</li>';
+}
+
+$('#gf').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target, btn = $('#gsubmit');
+  btn.disabled = true;
+  try {
+    await call('saveGoal', { deadline: f.deadline.value, weight: f.weight.value, fatPct: f.fatPct.value, muscle: f.muscle.value });
+    toast('목표를 저장했습니다');
+    goalFormFilled = false;
+    await load();
+  } catch (err) { toast('저장 실패: ' + err.message); }
+  btn.disabled = false;
+});
+
+$('#glist').addEventListener('click', async e => {
+  const btn = e.target.closest('.del'); if (!btn) return;
+  if (btn.dataset.confirm !== '1') { btn.dataset.confirm = '1'; btn.textContent = '정말 삭제'; return; }
+  btn.disabled = true;
+  try { await call('deleteGoal', btn.dataset.date); toast('삭제했습니다'); goalFormFilled = false; await load(); }
+  catch (err) { toast('삭제 실패: ' + err.message); btn.disabled = false; }
+});
+
+// ---------- 시작 ----------
+$('#range').addEventListener('change', load);
+$('#wf').date.value = localToday();
+$('#mf').date.value = localToday();
+let saved = 'dash';
+try { saved = localStorage.getItem('tab') || 'dash'; } catch (e) {}
+showTab(TABS.includes(saved) ? saved : 'dash');
+load();
+</script>
+</body>
+</html>
