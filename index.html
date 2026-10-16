@@ -31,6 +31,22 @@
   .kpi .sub { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .badge { font-size:11px; padding:0 6px; border-radius:6px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
   .up { color:var(--bad); } .down { color:var(--good); }
+  .calnav { display:flex; align-items:center; gap:6px; }
+  .calnav button { width:28px; height:28px; padding:0; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--fg); font-size:16px; line-height:1; cursor:pointer; }
+  .calnav button:disabled { opacity:.35; cursor:default; }
+  .cal { display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; text-align:center; font-size:13px; font-variant-numeric:tabular-nums; }
+  .cal .dow { color:var(--muted); font-size:11px; padding-bottom:2px; }
+  .cal .d { min-height:58px; display:flex; flex-direction:column; align-items:stretch; gap:2px; padding:3px; border-radius:8px; border:1px solid var(--line); color:var(--muted); }
+  .cal .d > b { font-weight:400; font-size:12px; }
+  .cal .d.on { color:var(--fg); }
+  .cal .d.on > b { font-weight:700; }
+  .cal .d.today { outline:2px solid var(--accent); outline-offset:-2px; }
+  /* 부위 라벨: 흰 글자와 대비 4.5:1 이상인 진한 색 */
+  .cal .p, .callegend .p { display:block; border-radius:4px; padding:1px 0; font-size:10.5px; font-weight:600; line-height:1.3; color:#fff; white-space:nowrap; overflow:hidden; }
+  .p.상체 { background:#1d4ed8; } .p.하체 { background:#c2410c; }
+  .p.복근 { background:#7e22ce; } .p.유산소 { background:#15803d; }
+  .callegend { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .callegend .p { display:inline-block; padding:1px 6px; }
   .charts { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px; }
   .charts .card { margin:0; }
   .chart { position:relative; height:200px; }
@@ -103,7 +119,7 @@
       <section class="card"><h2>기초대사량</h2><div class="chart"><canvas id="cBmr"></canvas></div></section>
       <section class="card"><h2>섭취 · 소모 칼로리 <small>소모 = 기초대사 + 활동</small></h2><div class="chart"><canvas id="cKcal"></canvas></div></section>
       <section class="card"><h2>탄수화물 · 단백질 · 지방 (g)</h2><div class="chart"><canvas id="cMacro"></canvas></div></section>
-      <section class="card"><h2>운동 볼륨 <small>중량×횟수 합계</small></h2><div class="chart"><canvas id="cVol"></canvas></div></section>
+      <section class="card"><h2><span class="calnav"><button type="button" id="calPrev" aria-label="이전 달">‹</button><span id="calTitle"></span><button type="button" id="calNext" aria-label="다음 달">›</button></span><small id="calCount"></small></h2><div class="cal" id="cal"></div><div class="callegend"><span class="p 상체">상체</span><span class="p 하체">하체</span><span class="p 복근">복근</span><span class="p 유산소">유산소</span></div></section>
     </div>
     <p class="note">● 입력·실측값 &nbsp; ◆ 삼성헬스로 채운 값 &nbsp; ○ 점선: 추정값 (골격근·체수분 = 내 실측 비율 × 제지방량, 소모 칼로리 = 내 입력 비율 × 기초대사량)</p>
   </section>
@@ -414,11 +430,7 @@ function render() {
     { label: '지방', data: D.body.map(r => r.fat), backgroundColor: b },
   ], { type: 'bar', stacked: true, footer: footer('carb') });
 
-  const W = D.workoutDays;
-  chart('cVol', W.map(d => md(d.date)), [{ label: '볼륨(kg)', data: W.map(d => Math.round(d.volume)), backgroundColor: c, borderRadius: 3 }], {
-    type: 'bar',
-    footer: items => { const d = W[items[0].dataIndex]; return `${d.sets}세트${d.cardio ? ` · 유산소 ${d.cardio}분` : ''}`; },
-  });
+  renderCal();
 
 
   $('#equip').innerHTML = D.equipment.map(e => `<option value="${esc(e.name)}">`).join('');
@@ -428,6 +440,38 @@ function render() {
   updateMHint();
   renderGoal();
 }
+
+// 운동 달력: 운동한 날은 부위(상체·하체·복근·유산소) 표시, 안 한 날은 비움
+let calMonth = null; // 'yyyy-MM'
+function renderCal() {
+  const cal = D.workoutCal || {}, dates = Object.keys(cal);
+  const thisMonth = D.today.slice(0, 7);
+  if (!calMonth) calMonth = thisMonth;
+  const [y, m] = calMonth.split('-').map(Number);
+  const first = new Date(y, m - 1, 1).getDay(), last = new Date(y, m, 0).getDate();
+  const pad = n => String(n).padStart(2, '0');
+  let html = '일월화수목금토'.split('').map(w => `<div class="dow">${w}</div>`).join('');
+  html += '<div></div>'.repeat(first);
+  let count = 0;
+  for (let d = 1; d <= last; d++) {
+    const key = `${calMonth}-${pad(d)}`, parts = cal[key] || [];
+    if (parts.length) count++;
+    html += `<div class="d${parts.length ? ' on' : ''}${key === D.today ? ' today' : ''}"><b>${d}</b>` +
+      parts.map(p => `<span class="p ${p}">${p}</span>`).join('') + '</div>';
+  }
+  $('#cal').innerHTML = html;
+  $('#calTitle').textContent = `${y}년 ${m}월`;
+  $('#calCount').textContent = `운동 ${count}일`;
+  $('#calNext').disabled = calMonth >= thisMonth;
+  $('#calPrev').disabled = !dates.some(d => d < calMonth);
+}
+const shiftMonth = k => {
+  const [y, m] = calMonth.split('-').map(Number), d = new Date(y, m - 1 + k, 1);
+  calMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  renderCal();
+};
+$('#calPrev').addEventListener('click', () => shiftMonth(-1));
+$('#calNext').addEventListener('click', () => shiftMonth(1));
 
 // ---------- 운동 ----------
 function renderWorkouts() {
