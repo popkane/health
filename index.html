@@ -104,7 +104,6 @@
       <section class="card"><h2>섭취 · 소모 칼로리 <small>소모 = 기초대사 + 활동</small></h2><div class="chart"><canvas id="cKcal"></canvas></div></section>
       <section class="card"><h2>탄수화물 · 단백질 · 지방 (g)</h2><div class="chart"><canvas id="cMacro"></canvas></div></section>
       <section class="card"><h2>운동 볼륨 <small>중량×횟수 합계</small></h2><div class="chart"><canvas id="cVol"></canvas></div></section>
-      <section class="card" id="seriesCard"><h2 id="seriesTitle">측정 기록</h2><div class="chart"><canvas id="cSeries"></canvas></div></section>
     </div>
     <p class="note">● 입력·실측값 &nbsp; ◆ 삼성헬스로 채운 값 &nbsp; ○ 점선: 추정값 (골격근·체수분 = 내 실측 비율 × 제지방량, 소모 칼로리 = 내 입력 비율 × 기초대사량)</p>
   </section>
@@ -421,13 +420,6 @@ function render() {
     footer: items => { const d = W[items[0].dataIndex]; return `${d.sets}세트${d.cardio ? ` · 유산소 ${d.cardio}분` : ''}`; },
   });
 
-  const s = (D.series || []).find(x => x.rows.length) || (D.series || [])[0];
-  $('#seriesCard').hidden = !s;
-  if (s) {
-    $('#seriesTitle').textContent = s.label;
-    const unit = (s.rows[0] && s.rows[0].unit) || '';
-    chart('cSeries', s.rows.map(r => md(r.date)), [{ label: `${s.label}${unit ? `(${unit})` : ''}`, data: s.rows.map(r => r.value), borderColor: a, backgroundColor: a, tension: .3, pointRadius: 3 }]);
-  }
 
   $('#equip').innerHTML = D.equipment.map(e => `<option value="${esc(e.name)}">`).join('');
   renderWorkouts();
