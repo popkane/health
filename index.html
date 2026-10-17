@@ -126,6 +126,15 @@
   details.wday .ex { margin:0 0 10px 16px; }
   details.wday .ex > div:first-child { font-weight:600; font-size:14px; margin-bottom:2px; }
   details.wday .ex ul.list li { padding:5px 0; border-top:0; font-size:13px; }
+  .mini { width:auto; padding:6px 10px; font-size:13px; cursor:pointer; }
+  .del:disabled, .mini:disabled { opacity:.4; cursor:default; }
+  .selday { margin:0 0 8px 16px; }
+  label.check.pick { font-size:13px; gap:10px; padding:2px 0; }
+  label.check.pick input { width:20px; height:20px; flex:none; margin:0; }
+  .selbar { position:sticky; bottom:calc(10px + env(safe-area-inset-bottom, 0px)); display:flex; align-items:center; gap:8px; margin-top:12px; padding:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.12); }
+  .selbar #selCount { flex:1; font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+  button.danger { width:auto; padding:10px 16px; background:var(--bad); color:#fff; border:0; font-weight:600; cursor:pointer; }
+  button.danger:disabled { opacity:.45; cursor:default; }
   .hint { font-size:13px; color:var(--muted); min-height:1.2em; }
   select.range { width:auto; padding:6px 8px; font-size:13px; }
   .tools { display:flex; gap:6px; align-items:center; }
@@ -238,8 +247,13 @@
       <p class="note">실선: 그날 최고 중량 &nbsp; 점선: 추정 1RM = 중량 × (1 + (횟수 + RIR) ÷ 30), 그날 가장 높은 세트</p>
     </section>
     <section class="card">
-      <h2>최근 운동 <small>이 기간</small></h2>
+      <h2>최근 운동 <button type="button" class="mini" id="selToggle">여러 개 삭제</button></h2>
       <div id="wlist"></div>
+      <div class="selbar" id="selbar" hidden>
+        <span id="selCount">0개 선택</span>
+        <button type="button" class="mini" id="selCancel">취소</button>
+        <button type="button" class="danger" id="selDel" disabled>삭제</button>
+      </div>
     </section>
   </section>
 
@@ -589,18 +603,62 @@ function renderWorkouts() {
     if (!x) d.ex.push(x = { name: w.name, items: [] });
     x.items.unshift({ w, i }); // 목록은 최신순이라 앞에 넣어 1세트부터 보이게
   });
-  $('#wlist').innerHTML = days.map((d, k) => {
+  // 다시 그려도 펼쳐 둔 날은 그대로 (처음엔 가장 최근 날만)
+  const opened = new Set([...document.querySelectorAll('#wlist details[open]')].map(el => el.dataset.date));
+  if (!document.querySelector('#wlist details')) opened.add(days[0].date);
+  const rows = new Set(D.workouts.map(w => w.row));
+  [...selRows].forEach(r => { if (!rows.has(r)) selRows.delete(r); });
+  $('#wlist').innerHTML = days.map(d => {
     const items = d.ex.flatMap(x => x.items.map(it => it.w));
     const sets = items.filter(w => w.setLabel).length;
     const vol = Math.round(items.reduce((s, w) => s + (w.weight > 0 && w.reps > 0 ? w.weight * w.reps : 0), 0));
     const parts = (D.workoutCal[d.date] || []).join('·');
-    return `<details class="wday"${k === 0 ? ' open' : ''}><summary><b>${d.date.replace(/-/g, '.')} (${dow(d.date)})</b>
+    const line = w => `<span>${esc(w.setLabel ? `${w.setLabel} ${setTxt(w)}` : '유산소')}${w.note ? ` <span class="meta">${esc(w.note)}</span>` : ''}</span>`;
+    return `<details class="wday" data-date="${d.date}"${opened.has(d.date) ? ' open' : ''}><summary><b>${d.date.replace(/-/g, '.')} (${dow(d.date)})</b>
       <span class="meta">${parts} · ${d.ex.length}종목${sets ? ` ${sets}세트` : ''}${vol ? ` · ${vol.toLocaleString()}kg` : ''}</span></summary>` +
-      d.ex.slice().reverse().map(x => `<div class="ex"><div>${esc(x.name)}</div><ul class="list">` + x.items.map(({ w, i }) =>
-        `<li><span>${esc(w.setLabel ? `${w.setLabel} ${setTxt(w)}` : '유산소')}${w.note ? ` <span class="meta">${esc(w.note)}</span>` : ''}</span>
-        <button class="del" data-i="${i}">삭제</button></li>`).join('') + '</ul></div>').join('') + '</details>';
+      (selMode ? `<button type="button" class="mini selday" data-date="${d.date}">이 날 전체 선택</button>` : '') +
+      d.ex.slice().reverse().map(x => `<div class="ex"><div>${esc(x.name)}</div><ul class="list">` + x.items.map(({ w, i }) => selMode
+        ? `<li><label class="check pick"><input type="checkbox" data-row="${w.row}"${selRows.has(w.row) ? ' checked' : ''}>${line(w)}</label></li>`
+        : `<li>${line(w)}<button class="del" data-i="${i}">삭제</button></li>`).join('') + '</ul></div>').join('') + '</details>';
   }).join('');
+  updateSelBar();
 }
+
+// ---------- 운동 기록 삭제: 한 개씩(두 번 눌러 확인) 또는 여러 개 골라서 한 번에 ----------
+let selMode = false, deleting = false;
+const selRows = new Set();
+function updateSelBar() {
+  const n = selRows.size, del = $('#selDel');
+  $('#selbar').hidden = !selMode;
+  $('#selToggle').textContent = selMode ? '선택 끝' : '여러 개 삭제';
+  $('#selCount').textContent = `${n}개 선택`;
+  del.disabled = deleting || !n;
+  if (!deleting) { del.dataset.confirm = ''; del.textContent = n ? `${n}개 삭제` : '삭제'; }
+}
+// 삭제하는 동안은 목록의 모든 삭제 버튼·체크를 잠근다 (행 번호가 바뀌는 중에 또 지우지 않게)
+function setDeleting(on) {
+  deleting = on;
+  document.querySelectorAll('#wlist button, #wlist input, #selToggle, #selCancel').forEach(el => { el.disabled = on; });
+  updateSelBar();
+}
+async function removeWorkouts(list) {
+  setDeleting(true);
+  if (selMode) $('#selDel').textContent = '삭제 중…';
+  try {
+    const n = await call('deleteWorkouts', list.map(w => ({ row: w.row, date: w.date, name: w.name, setLabel: w.setLabel })));
+    toast(`${n}개 삭제했습니다`);
+    selRows.clear(); selMode = false;
+    await load();
+  } catch (err) { toast('삭제 실패: ' + err.message); }
+  setDeleting(false);
+}
+$('#selToggle').addEventListener('click', () => { selMode = !selMode; selRows.clear(); renderWorkouts(); });
+$('#selCancel').addEventListener('click', () => { selMode = false; selRows.clear(); renderWorkouts(); });
+$('#selDel').addEventListener('click', e => {
+  const b = e.currentTarget; if (deleting || !selRows.size) return;
+  if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = `정말 ${selRows.size}개 삭제`; return; }
+  removeWorkouts(D.workouts.filter(w => selRows.has(w.row)));
+});
 
 // ---------- 기구 빠른 선택: 부위 칩 · 즐겨찾기 · 루틴 ----------
 let favs = [], pchip = 'all', routine = null, pickList = [];
@@ -818,15 +876,24 @@ $('#wf').addEventListener('submit', async e => {
   busy(btn, false); updateHint();
 });
 
-$('#wlist').addEventListener('click', async e => {
+$('#wlist').addEventListener('click', e => {
+  if (deleting) return;
+  const all = e.target.closest('.selday');
+  if (all) {
+    const rows = D.workouts.filter(w => w.date === all.dataset.date).map(w => w.row);
+    const on = !rows.every(r => selRows.has(r));
+    rows.forEach(r => (on ? selRows.add(r) : selRows.delete(r)));
+    renderWorkouts(); return;
+  }
   const btn = e.target.closest('.del'); if (!btn) return;
   if (btn.dataset.confirm !== '1') { btn.dataset.confirm = '1'; btn.textContent = '정말 삭제'; return; }
-  const w = D.workouts[Number(btn.dataset.i)];
-  btn.disabled = true;
-  try {
-    await call('deleteWorkout', { row: w.row, date: w.date, name: w.name, setLabel: w.setLabel });
-    toast('삭제했습니다'); await load();
-  } catch (err) { toast('삭제 실패: ' + err.message); btn.disabled = false; }
+  removeWorkouts([D.workouts[Number(btn.dataset.i)]]);
+});
+$('#wlist').addEventListener('change', e => {
+  const cb = e.target.closest('input[data-row]'); if (!cb) return;
+  const r = Number(cb.dataset.row);
+  cb.checked ? selRows.add(r) : selRows.delete(r);
+  updateSelBar();
 });
 
 // ---------- 실측 입력 (골격근량·체수분·총 소모 칼로리) ----------
