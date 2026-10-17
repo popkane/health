@@ -313,7 +313,7 @@ if (location.search) history.replaceState(null, '', location.pathname);
 const $ = s => document.querySelector(s);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const charts = {};
-if (window.Chart) Chart.defaults.font.family = '"Pretendard Variable", Pretendard, sans-serif';
+if (window.Chart && Chart.defaults) Chart.defaults.font.family = '"Pretendard Variable", Pretendard, sans-serif';
 let D = null;
 
 async function call(fn, ...args) {
