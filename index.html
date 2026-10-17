@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111317" media="(prefers-color-scheme: dark)">
 <title>헬스 대시보드</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -11,7 +13,12 @@
   @media (prefers-color-scheme: dark) {
     :root { --bg:#111317; --card:#1b1e24; --fg:#e8eaed; --muted:#9aa0a6; --line:#2d3139; --accent:#60a5fa; --accent2:#fbbf24; --accent3:#34d399; --good:#4ade80; --bad:#f87171; }
   }
+  :root { color-scheme:light dark; }
   * { box-sizing:border-box; }
+  /* 빠르게 연타해도 두 번 톡 확대가 일어나지 않게 */
+  button, input, select, label, summary { touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+  input, table.cmp, .picks small, .meta, .hint, #eqSum { font-variant-numeric:tabular-nums; }
+  .picks button, details.wday .ex > div:first-child, .sugg li { overflow-wrap:anywhere; }
   body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
   main { max-width:1000px; margin:0 auto; padding:0 16px 32px; }
   header { position:sticky; top:0; z-index:5; background:var(--bg); padding:12px 0 0; margin-bottom:12px; border-bottom:1px solid var(--line); }
@@ -170,10 +177,10 @@
         <div class="picks full" id="picks"></div>
         <div class="combo full"><label>기구 <small>검색하거나 위에서 고르기</small><span class="namerow"><input name="ename" placeholder="예: 레그프레스(원판)" autocomplete="off" required><button type="button" id="fav" class="fav" aria-label="즐겨찾기">☆</button></span></label><ul class="sugg" id="sugg" hidden></ul></div>
         <label class="check full"><input type="checkbox" name="cardio" id="cardio"> 유산소 (세트 없이 시간·거리 기록)</label>
-        <label data-mode="set">중량(kg)<span class="step"><button type="button" data-step="-2.5">−</button><input type="number" name="weight" inputmode="decimal" step="0.5" min="0"><button type="button" data-step="2.5">+</button></span></label>
-        <label data-mode="set">횟수<span class="step"><button type="button" data-step="-1">−</button><input type="number" name="reps" inputmode="numeric" min="0"><button type="button" data-step="1">+</button></span></label>
-        <label data-mode="set">여유횟수(RIR)<span class="step"><button type="button" data-step="-1">−</button><input type="number" name="rir" inputmode="numeric" min="0"><button type="button" data-step="1">+</button></span></label>
-        <label data-mode="set">휴식(초)<span class="step"><button type="button" data-step="-5">−</button><input type="number" name="rest" inputmode="numeric" min="0" step="1"><button type="button" data-step="5">+</button></span></label>
+        <label data-mode="set" for="w-weight">중량(kg)<span class="step"><button type="button" data-step="-2.5" aria-label="중량 2.5kg 빼기">−</button><input type="number" id="w-weight" name="weight" inputmode="decimal" step="0.5" min="0"><button type="button" data-step="2.5" aria-label="중량 2.5kg 더하기">+</button></span></label>
+        <label data-mode="set" for="w-reps">횟수<span class="step"><button type="button" data-step="-1" aria-label="횟수 1 빼기">−</button><input type="number" id="w-reps" name="reps" inputmode="numeric" min="0"><button type="button" data-step="1" aria-label="횟수 1 더하기">+</button></span></label>
+        <label data-mode="set" for="w-rir">여유횟수(RIR)<span class="step"><button type="button" data-step="-1" aria-label="RIR 1 빼기">−</button><input type="number" id="w-rir" name="rir" inputmode="numeric" min="0"><button type="button" data-step="1" aria-label="RIR 1 더하기">+</button></span></label>
+        <label data-mode="set" for="w-rest">휴식(초)<span class="step"><button type="button" data-step="-5" aria-label="휴식 5초 빼기">−</button><input type="number" id="w-rest" name="rest" inputmode="numeric" min="0" step="1"><button type="button" data-step="5" aria-label="휴식 5초 더하기">+</button></span></label>
         <label data-mode="cardio" hidden>시간(분)<input type="number" name="cmin" inputmode="numeric" min="0"></label>
         <label data-mode="cardio" hidden>거리(km)<input type="number" name="ckm" inputmode="decimal" step="0.01" min="0"></label>
         <label data-mode="cardio" hidden>평균심박<input type="number" name="chr" inputmode="numeric" min="0"></label>
@@ -241,7 +248,7 @@
     </section>
   </section>
 </main>
-<div id="toast" hidden></div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
 <form id="login" class="login" hidden>
   <div class="card">
     <h2>비밀키 입력</h2>
@@ -292,6 +299,11 @@ $('#login').addEventListener('submit', e => {
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.hidden = false;
   clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 2200);
+}
+// 저장 버튼: 요청 중에는 "저장 중…"으로 바꿔 두 번 누르지 않게 한다
+function busy(btn, on) {
+  if (on) { btn.dataset.label = btn.textContent; btn.textContent = '저장 중…'; btn.disabled = true; }
+  else { btn.textContent = btn.dataset.label || btn.textContent; btn.disabled = false; }
 }
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 const md = d => d.slice(5).replace('-', '/');
@@ -681,7 +693,7 @@ function updateHint() {
   if (name && !cardio) txt = `오늘 ${cnt}세트째`;
   if (e && e.date && !(e.prev && !cardio)) txt += `${txt ? ' · ' : ''}지난 기록 ${md(e.date)}${e.weight != null ? ` ${e.weight}kg` : ''}${e.reps != null ? ` × ${e.reps}회` : ''}`;
   $('#hint').textContent = txt;
-  $('#wsubmit').textContent = name && !cardio ? `${cnt}세트 저장` : '저장';
+  if (!$('#wsubmit').disabled) $('#wsubmit').textContent = name && !cardio ? `${cnt}세트 저장` : '저장';
   renderCmp(e, name, cardio);
   renderPicks();
   if (e && name !== eqShown && (D.history || {})[name]) renderEquip(name); // 그래프도 고른 기구로
@@ -752,7 +764,7 @@ $('#wf').addEventListener('submit', async e => {
     const c = `${f.cmin.value ? f.cmin.value + '분' : ''}${f.ckm.value ? f.ckm.value + '키로' : ''}${f.chr.value ? ' 평균심박' + f.chr.value : ''}`.trim();
     w.note = [c, w.note].filter(Boolean).join(' ');
   }
-  btn.disabled = true;
+  busy(btn, true);
   const rec = recordMsg(w);
   try {
     const r = await call('addWorkout', w);
@@ -761,7 +773,7 @@ $('#wf').addEventListener('submit', async e => {
     f.note.value = ''; f.cmin.value = ''; f.ckm.value = ''; f.chr.value = '';
     await load();
   } catch (err) { toast('저장 실패: ' + err.message); }
-  btn.disabled = false;
+  busy(btn, false); updateHint();
 });
 
 $('#wlist').addEventListener('click', async e => {
@@ -818,20 +830,20 @@ function updateMHint() {
   }
   if (m) txt = '웹에서 입력한 값을 수정합니다. ' + txt;
   $('#mhint').textContent = txt;
-  $('#msubmit').textContent = m ? '수정' : '저장';
+  if (!$('#msubmit').disabled) $('#msubmit').textContent = m ? '수정' : '저장';
 }
 $('#mf').date.addEventListener('change', updateMHint);
 
 $('#mf').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target, btn = $('#msubmit');
-  btn.disabled = true;
+  busy(btn, true);
   try {
     await call('saveMeasure', { date: f.date.value, muscle: f.muscle.value, water: f.water.value, burn: f.burn.value });
     toast('저장했습니다');
     await load();
   } catch (err) { toast('저장 실패: ' + err.message); }
-  btn.disabled = false;
+  busy(btn, false); updateMHint();
 });
 
 $('#mlist').addEventListener('click', async e => {
@@ -888,14 +900,14 @@ function renderGoal() {
 $('#gf').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target, btn = $('#gsubmit');
-  btn.disabled = true;
+  busy(btn, true);
   try {
     await call('saveGoal', { deadline: f.deadline.value, weight: f.weight.value, fatPct: f.fatPct.value, muscle: f.muscle.value });
     toast('목표를 저장했습니다');
     goalFormFilled = false;
     await load();
   } catch (err) { toast('저장 실패: ' + err.message); }
-  btn.disabled = false;
+  busy(btn, false);
 });
 
 $('#glist').addEventListener('click', async e => {
