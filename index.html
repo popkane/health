@@ -68,9 +68,33 @@
   .step button { width:44px; flex:none; padding:10px 0; font-size:18px; line-height:1; cursor:pointer; }
   .step input { text-align:center; }
   #rtimer { color:var(--accent); font-weight:600; }
-  ul.sets { list-style:none; margin:0; padding:8px 12px; background:var(--bg); border-radius:8px; font-size:13px; }
-  ul.sets li { padding:3px 0; }
-  ul.sets li b { display:inline-block; min-width:44px; }
+  .namerow { display:flex; gap:4px; }
+  .fav { width:44px; flex:none; padding:0; font-size:20px; color:var(--accent2); cursor:pointer; }
+  .pchips button[aria-pressed="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .picks { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:6px; max-height:236px; overflow:auto; }
+  .picks:empty { display:none; }
+  .picks button { position:relative; text-align:left; padding:8px 30px 8px 10px; font-size:14px; line-height:1.3; cursor:pointer; }
+  .picks button small { display:block; color:var(--muted); font-size:11px; }
+  .picks button.on { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); }
+  .picks button.next { border-style:dashed; border-color:var(--accent); }
+  .picks button.done { opacity:.6; }
+  .picks .cnt { position:absolute; top:6px; right:8px; font-size:11px; font-weight:700; color:var(--good); }
+  .picks .nx { position:absolute; top:6px; right:8px; font-size:11px; font-weight:700; color:var(--accent); }
+  table.cmp { width:100%; border-collapse:collapse; font-size:13px; background:var(--bg); border-radius:8px; }
+  table.cmp th, table.cmp td { padding:6px 10px; text-align:left; }
+  table.cmp th { color:var(--muted); font-weight:600; font-size:12px; }
+  table.cmp td.up { color:var(--good); } table.cmp td.down { color:var(--bad); }
+  .eqsel { margin-bottom:8px; }
+  details.wday { border-top:1px solid var(--line); }
+  details.wday:first-child { border-top:0; }
+  details.wday summary { padding:10px 0; cursor:pointer; list-style:none; display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  details.wday summary::-webkit-details-marker { display:none; }
+  details.wday summary::before { content:'▸'; color:var(--muted); margin-right:6px; }
+  details.wday[open] summary::before { content:'▾'; }
+  details.wday summary b { flex:1; }
+  details.wday .ex { margin:0 0 10px 16px; }
+  details.wday .ex > div:first-child { font-weight:600; font-size:14px; margin-bottom:2px; }
+  details.wday .ex ul.list li { padding:5px 0; border-top:0; font-size:13px; }
   .hint { font-size:13px; color:var(--muted); min-height:1.2em; }
   select.range { width:auto; padding:6px 8px; font-size:13px; }
   .tools { display:flex; gap:6px; align-items:center; }
@@ -90,7 +114,7 @@
   .chips button { width:auto; padding:6px 10px; font-size:13px; cursor:pointer; }
   .chips small { color:var(--muted); }
   .login { position:fixed; inset:0; z-index:20; background:var(--bg); display:grid; place-items:center; padding:16px; }
-  .login[hidden] { display:none; }
+  [hidden] { display:none !important; }
   .login .card { width:100%; max-width:360px; }
   #toast { position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); background:var(--fg); color:var(--bg); padding:8px 14px; border-radius:8px; font-size:14px; z-index:10; }
 </style>
@@ -142,7 +166,10 @@
       <h2>운동 기록하기 <small>웰니스 아카이브 › 운동기록 탭에 저장</small></h2>
       <form id="wf">
         <label>날짜<input type="date" name="date" required></label>
-        <div class="combo"><label>기구<input name="ename" placeholder="예: 레그프레스(원판)" autocomplete="off" required></label><ul class="sugg" id="sugg" hidden></ul></div>
+        <label>루틴<select id="routine"></select></label>
+        <div class="chips pchips full" id="pchips"></div>
+        <div class="picks full" id="picks"></div>
+        <div class="combo full"><label>기구 <small>검색하거나 위에서 고르기</small><span class="namerow"><input name="ename" placeholder="예: 레그프레스(원판)" autocomplete="off" required><button type="button" id="fav" class="fav" aria-label="즐겨찾기">☆</button></span></label><ul class="sugg" id="sugg" hidden></ul></div>
         <label class="check full"><input type="checkbox" name="cardio" id="cardio"> 유산소 (세트 없이 시간·거리 기록)</label>
         <label data-mode="set">중량(kg)<span class="step"><button type="button" data-step="-2.5">−</button><input type="number" name="weight" inputmode="decimal" step="0.5" min="0"><button type="button" data-step="2.5">+</button></span></label>
         <label data-mode="set">횟수<span class="step"><button type="button" data-step="-1">−</button><input type="number" name="reps" inputmode="numeric" min="0"><button type="button" data-step="1">+</button></span></label>
@@ -153,13 +180,19 @@
         <label data-mode="cardio" hidden>평균심박<input type="number" name="chr" inputmode="numeric" min="0"></label>
         <label class="full">특이사항<input name="note"></label>
         <div class="hint full" id="hint"></div>
-        <ul class="sets full" id="todaySets" hidden></ul>
+        <table class="cmp full" id="cmp" hidden></table>
         <button class="primary full" id="wsubmit">저장</button>
       </form>
     </section>
     <section class="card">
-      <h2>최근 운동</h2>
-      <ul class="list" id="wlist"></ul>
+      <h2>기구별 기록 <small id="eqSum"></small></h2>
+      <select id="eqSel" class="eqsel"></select>
+      <div class="chart"><canvas id="cEquip"></canvas></div>
+      <p class="note">실선: 그날 최고 중량 &nbsp; 점선: 추정 1RM = 중량 × (1 + (횟수 + RIR) ÷ 30), 그날 가장 높은 세트</p>
+    </section>
+    <section class="card">
+      <h2>최근 운동 <small>이 기간</small></h2>
+      <div id="wlist"></div>
     </section>
   </section>
 
@@ -276,7 +309,7 @@ function showTab(name) {
   document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   TABS.forEach(t => { $('#tab-' + t).hidden = t !== name; });
   try { localStorage.setItem('tab', name); } catch (e) {}
-  if (name === 'dash' && D) Object.values(charts).forEach(c => c.resize());
+  if (D) Object.values(charts).forEach(c => c.resize());
 }
 document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -446,6 +479,8 @@ function render() {
 
 
   renderWorkouts();
+  renderRoutineSel();
+  renderEquip(eqShown || $('#wf').ename.value.trim());
   updateHint();
   renderMeasures();
   updateMHint();
@@ -485,18 +520,155 @@ $('#calPrev').addEventListener('click', () => shiftMonth(-1));
 $('#calNext').addEventListener('click', () => shiftMonth(1));
 
 // ---------- 운동 ----------
+const dow = d => '일월화수목금토'[new Date(d + 'T00:00:00').getDay()];
+const setTxt = w => [w.weight != null && `${w.weight}kg`, w.reps != null && `${w.reps}회`, w.rir != null && `RIR ${w.rir}`, w.rest != null && `휴식 ${w.rest}초`].filter(Boolean).join(' · ');
+const byRecent = (a, b) => (b.date || '').localeCompare(a.date || '');
+const store = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (e) {} };
+
+// 최근 운동: 날짜별로 접고 펼치기, 안에서는 기구별로 묶는다 (가장 최근 날만 펼쳐 둠)
 function renderWorkouts() {
-  if (!D.workouts.length) { $('#wlist').innerHTML = '<li class="empty">이 기간에 운동 기록이 없습니다.</li>'; return; }
-  let prev = '', html = '';
-  D.workouts.slice(0, 60).forEach((w, i) => {
-    if (w.date !== prev) { html += `<li class="day">${w.date.replace(/-/g, '.')}</li>`; prev = w.date; }
-    const parts = w.setLabel
-      ? [w.setLabel, w.weight != null && `${w.weight}kg`, w.reps != null && `${w.reps}회`, w.rir != null && `RIR ${w.rir}`, w.rest != null && `휴식 ${w.rest}초`]
-      : ['유산소'];
-    html += `<li><div><div>${esc(w.name)}</div><div class="meta">${esc(parts.filter(Boolean).join(' · '))}${w.note ? ' · ' + esc(w.note) : ''}</div></div>
-      <button class="del" data-i="${i}">삭제</button></li>`;
+  if (!D.workouts.length) { $('#wlist').innerHTML = '<p class="empty">이 기간에 운동 기록이 없습니다.</p>'; return; }
+  const days = [];
+  D.workouts.forEach((w, i) => {
+    let d = days[days.length - 1];
+    if (!d || d.date !== w.date) days.push(d = { date: w.date, ex: [] });
+    let x = d.ex.find(x => x.name === w.name);
+    if (!x) d.ex.push(x = { name: w.name, items: [] });
+    x.items.unshift({ w, i }); // 목록은 최신순이라 앞에 넣어 1세트부터 보이게
   });
-  $('#wlist').innerHTML = html;
+  $('#wlist').innerHTML = days.map((d, k) => {
+    const items = d.ex.flatMap(x => x.items.map(it => it.w));
+    const sets = items.filter(w => w.setLabel).length;
+    const vol = Math.round(items.reduce((s, w) => s + (w.weight > 0 && w.reps > 0 ? w.weight * w.reps : 0), 0));
+    const parts = (D.workoutCal[d.date] || []).join('·');
+    return `<details class="wday"${k === 0 ? ' open' : ''}><summary><b>${d.date.replace(/-/g, '.')} (${dow(d.date)})</b>
+      <span class="meta">${parts} · ${d.ex.length}종목${sets ? ` ${sets}세트` : ''}${vol ? ` · ${vol.toLocaleString()}kg` : ''}</span></summary>` +
+      d.ex.slice().reverse().map(x => `<div class="ex"><div>${esc(x.name)}</div><ul class="list">` + x.items.map(({ w, i }) =>
+        `<li><span>${esc(w.setLabel ? `${w.setLabel} ${setTxt(w)}` : '유산소')}${w.note ? ` <span class="meta">${esc(w.note)}</span>` : ''}</span>
+        <button class="del" data-i="${i}">삭제</button></li>`).join('') + '</ul></div>').join('') + '</details>';
+  }).join('');
+}
+
+// ---------- 기구 빠른 선택: 부위 칩 · 즐겨찾기 · 루틴 ----------
+let favs = [], pchip = 'all', routine = null, pickList = [];
+try { favs = JSON.parse(localStorage.getItem('favs')) || []; } catch (e) {}
+try { pchip = localStorage.getItem('pchip') || 'all'; } catch (e) {}
+try { const r = JSON.parse(localStorage.getItem('routine')); if (r && r.on === localToday()) routine = r; } catch (e) {}
+
+// 고른 날짜에 기구별로 몇 번 기록했는지
+function doneOn() {
+  const c = {}, d = $('#wf').date.value;
+  D.workouts.forEach(w => { if (w.date === d) c[w.name] = (c[w.name] || 0) + 1; });
+  return c;
+}
+
+function renderPicks() {
+  if (pchip === 'routine' && !routine) pchip = 'all';
+  const chips = [routine && ['routine', `루틴 ${md(routine.date)}`], ['fav', '★ 즐겨찾기'], ['all', '최근'], ...['상체', '하체', '복근', '유산소'].map(p => [p, p])].filter(Boolean);
+  $('#pchips').innerHTML = chips.map(([k, l]) => `<button type="button" data-k="${k}" aria-pressed="${k === pchip}">${l}</button>`).join('');
+  const byName = Object.fromEntries(D.equipment.map(e => [e.name, e]));
+  if (pchip === 'routine') pickList = routine.names.map(n => byName[n] || { name: n });
+  else if (pchip === 'fav') pickList = favs.map(n => byName[n] || { name: n });
+  else pickList = D.equipment.filter(e => pchip === 'all' || e.part === pchip).sort(byRecent).slice(0, pchip === 'all' ? 12 : 40);
+  const cur = $('#wf').ename.value.trim(), done = doneOn();
+  const next = pchip === 'routine' ? pickList.find(e => !done[e.name]) : null;
+  $('#picks').innerHTML = pickList.length ? pickList.map((e, i) => {
+    const meta = e.cardio ? '유산소' : [e.weight != null && `${e.weight}kg`, e.reps != null && `× ${e.reps}`].filter(Boolean).join(' ');
+    const cls = [e.name === cur && 'on', done[e.name] && 'done', e === next && 'next'].filter(Boolean).join(' ');
+    const badge = done[e.name] ? `<span class="cnt">✓${e.cardio ? '' : done[e.name]}</span>` : e === next ? '<span class="nx">다음</span>' : '';
+    return `<button type="button" data-i="${i}" class="${cls}">${esc(e.name)}<small>${e.date ? md(e.date) + ' ' : ''}${esc(meta)}</small>${badge}</button>`;
+  }).join('') : pchip === 'fav' ? '<p class="empty" style="grid-column:1/-1;margin:0">기구를 고른 뒤 ☆를 누르면 여기에 모입니다.</p>' : '';
+  $('#fav').textContent = favs.includes(cur) ? '★' : '☆';
+}
+
+function selectEquip(name) {
+  const f = $('#wf');
+  f.ename.value = name;
+  $('#sugg').hidden = true;
+  f.ename.dispatchEvent(new Event('change'));
+}
+
+$('#pchips').addEventListener('click', e => {
+  const b = e.target.closest('[data-k]'); if (!b) return;
+  pchip = b.dataset.k; store('pchip', pchip); renderPicks();
+});
+$('#picks').addEventListener('click', e => {
+  const b = e.target.closest('[data-i]'); if (b) selectEquip(pickList[Number(b.dataset.i)].name);
+});
+$('#fav').addEventListener('click', () => {
+  const n = $('#wf').ename.value.trim(); if (!n) return;
+  const on = !favs.includes(n);
+  favs = on ? [...favs, n] : favs.filter(x => x !== n);
+  store('favs', favs); renderPicks();
+  toast(on ? `★ ${n} 즐겨찾기에 추가` : `${n} 즐겨찾기에서 뺐습니다`);
+});
+
+// 루틴: 지난 운동한 날 하나를 골라 그날 한 기구 순서대로 따라간다 (오늘만 유지)
+function renderRoutineSel() {
+  const d = $('#wf').date.value, ss = (D.sessions || []).filter(s => s.date !== d).slice(0, 30);
+  $('#routine').innerHTML = '<option value="">안 씀 · 지난 운동 따라하기</option>' + ss.map(s =>
+    `<option value="${s.date}"${routine && routine.date === s.date ? ' selected' : ''}>${md(s.date)}(${dow(s.date)}) ${s.parts.join('·')} · ${s.names.length}종목</option>`).join('');
+}
+$('#routine').addEventListener('change', e => {
+  const s = (D.sessions || []).find(x => x.date === e.target.value);
+  routine = s ? { date: s.date, names: s.names, on: localToday() } : null;
+  store('routine', routine);
+  pchip = routine ? 'routine' : 'all'; store('pchip', pchip);
+  renderPicks();
+  if (routine) {
+    const done = doneOn(), n = routine.names.find(x => !done[x]);
+    if (n) selectEquip(n);
+  }
+});
+
+// 지난번 세트와 오늘 세트를 나란히 (오늘이 더 좋으면 ↑ 초록, 못하면 ↓ 빨강)
+function renderCmp(e, name, cardio) {
+  const tb = $('#cmp'), d = $('#wf').date.value;
+  const today = cardio || !name ? [] : D.workouts.filter(w => w.date === d && w.name === name && w.setLabel).reverse();
+  const prev = !cardio && e && e.prev && e.prev.date !== d ? e.prev.sets : [];
+  const n = Math.max(today.length, prev.length);
+  if (!n) { tb.hidden = true; return; }
+  const cell = s => (s ? `${s.weight ?? '–'}kg × ${s.reps ?? '–'}${s.rir != null ? ` <small>R${s.rir}</small>` : ''}` : '');
+  const score = s => (s.weight || 0) * (1 + (s.reps || 0) / 30);
+  let h = `<tr><th>세트</th><th>지난번${prev.length ? ' ' + md(e.prev.date) : ''}</th><th>오늘</th></tr>`;
+  for (let i = 0; i < n; i++) {
+    const p = prev[i], t = today[i];
+    const cls = p && t ? (score(t) > score(p) + 1e-9 ? 'up' : score(t) < score(p) - 1e-9 ? 'down' : '') : '';
+    h += `<tr><td>${i + 1}</td><td>${cell(p)}</td><td class="${cls}">${cell(t)}${cls === 'up' ? ' ↑' : cls === 'down' ? ' ↓' : ''}</td></tr>`;
+  }
+  tb.innerHTML = h; tb.hidden = false;
+}
+
+// ---------- 기구별 기록 그래프 ----------
+let eqShown = '';
+function renderEquip(name) {
+  const H = D.history || {}, sel = $('#eqSel');
+  const names = D.equipment.filter(e => H[e.name]).sort(byRecent).map(e => e.name);
+  const n = H[name] ? name : H[sel.value] ? sel.value : names[0];
+  sel.innerHTML = names.map(x => `<option${x === n ? ' selected' : ''}>${esc(x)}</option>`).join('');
+  eqShown = n || '';
+  const rows = H[n] || [];
+  const a = css('--accent'), b = css('--accent2');
+  chart('cEquip', rows.map(r => md(r.date)), [
+    { label: '최고 중량(kg)', data: rows.map(r => r.top), borderColor: a, backgroundColor: a, tension: .3 },
+    { label: '추정 1RM(kg)', data: rows.map(r => r.e1rm), borderColor: b, backgroundColor: b, borderDash: [5, 4], tension: .3, pointRadius: 2 },
+  ], { footer: items => { const r = rows[items[0].dataIndex]; return `${r.sets}세트 · 최고 ${r.top ?? '–'}kg × ${r.reps ?? '–'}회`; } });
+  const maxBy = k => rows.reduce((m, r) => (r[k] != null && (!m || r[k] > m[k]) ? r : m), null);
+  const t = maxBy('top'), e = maxBy('e1rm');
+  $('#eqSum').textContent = rows.length ? `${rows.length}회${t ? ` · 최고 ${t.top}kg(${md(t.date)})` : ''}${e ? ` · 1RM ${e.e1rm}kg` : ''}` : '';
+}
+$('#eqSel').addEventListener('change', e => renderEquip(e.target.value));
+
+// 저장하려는 세트가 이 기구 신기록인지 (최고 중량 또는 추정 1RM)
+function recordMsg(w) {
+  const H = (D.history || {})[w.name];
+  if (w.cardio || !H || !H.length || !(Number(w.weight) > 0)) return '';
+  const wt = Number(w.weight), reps = Number(w.reps) || 0, rir = Number(w.rir) || 0;
+  const maxTop = Math.max(...H.map(r => r.top ?? 0)), maxE = Math.max(...H.map(r => r.e1rm ?? 0));
+  if (wt > maxTop) return `🎉 신기록! ${w.name} 최고 중량 ${wt}kg`;
+  const e = r1(wt * (1 + (reps + rir) / 30));
+  if (reps > 0 && e > maxE) return `🎉 신기록! ${w.name} 추정 1RM ${e}kg`;
+  return '';
 }
 
 // 기구를 고르면 지난번 기록으로 칸을 채우고, 오늘 몇 번째 세트인지 보여준다
@@ -508,13 +680,12 @@ function updateHint() {
   const cnt = (D.todayCount[name] || 0) + 1;
   let txt = '';
   if (name && !cardio) txt = `오늘 ${cnt}세트째`;
-  if (e && e.date) txt += `${txt ? ' · ' : ''}지난 기록 ${md(e.date)}${e.weight != null ? ` ${e.weight}kg` : ''}${e.reps != null ? ` × ${e.reps}회` : ''}`;
+  if (e && e.date && !(e.prev && !cardio)) txt += `${txt ? ' · ' : ''}지난 기록 ${md(e.date)}${e.weight != null ? ` ${e.weight}kg` : ''}${e.reps != null ? ` × ${e.reps}회` : ''}`;
   $('#hint').textContent = txt;
   $('#wsubmit').textContent = name && !cardio ? `${cnt}세트 저장` : '저장';
-  // 오늘 이 기구로 한 세트들
-  const sets = cardio ? [] : D.workouts.filter(w => w.date === f.date.value && w.name === name && w.setLabel).reverse();
-  $('#todaySets').innerHTML = sets.map(w => `<li><b>${esc(w.setLabel)}</b>${esc([w.weight != null && `${w.weight}kg`, w.reps != null && `${w.reps}회`, w.rir != null && `RIR ${w.rir}`, w.rest != null && `휴식 ${w.rest}초`].filter(Boolean).join(' · '))}</li>`).join('');
-  $('#todaySets').hidden = !sets.length;
+  renderCmp(e, name, cardio);
+  renderPicks();
+  if (e && name !== eqShown && (D.history || {})[name]) renderEquip(name); // 그래프도 고른 기구로
   tickRest();
 }
 
@@ -584,7 +755,7 @@ $('#wf').ename.addEventListener('keydown', e => { if (e.key === 'Escape') $('#su
 $('#sugg').addEventListener('mousedown', e => e.preventDefault()); // 누르는 순간 입력칸이 포커스를 잃어 목록이 닫히지 않게
 $('#sugg').addEventListener('click', e => { const li = e.target.closest('li'); if (li) pickSugg(Number(li.dataset.i)); });
 $('#cardio').addEventListener('change', e => setMode(e.target.checked));
-$('#wf').date.addEventListener('change', updateHint);
+$('#wf').date.addEventListener('change', () => { renderRoutineSel(); updateHint(); });
 
 $('#wf').addEventListener('submit', async e => {
   e.preventDefault();
@@ -599,9 +770,10 @@ $('#wf').addEventListener('submit', async e => {
     w.note = [c, w.note].filter(Boolean).join(' ');
   }
   btn.disabled = true;
+  const rec = recordMsg(w);
   try {
     const r = await call('addWorkout', w);
-    toast(`${w.name} ${r.setLabel || ''} 저장했습니다`);
+    toast(rec || `${w.name} ${r.setLabel || ''} 저장했습니다`);
     // 같은 기구 다음 세트는 저장만 누르면 되게 기구·중량·횟수·RIR은 남겨두고 휴식 타이머를 시작한다
     f.note.value = ''; f.cmin.value = ''; f.ckm.value = ''; f.chr.value = '';
     if (!w.cardio) {
