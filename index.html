@@ -135,6 +135,9 @@
   .selbar #selCount { flex:1; font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
   button.danger { width:auto; padding:10px 16px; background:var(--bad); color:#fff; border:0; font-weight:600; cursor:pointer; }
   button.danger:disabled { opacity:.45; cursor:default; }
+  .trash { margin-top:16px; padding-top:12px; border-top:1px solid var(--line); }
+  .trash h3 { font-size:14px; margin:0 0 4px; display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .trash h3 small { font-weight:400; color:var(--muted); font-size:12px; }
   .hint { font-size:13px; color:var(--muted); min-height:1.2em; }
   select.range { width:auto; padding:6px 8px; font-size:13px; }
   .tools { display:flex; gap:6px; align-items:center; }
@@ -253,6 +256,10 @@
         <span id="selCount">0개 선택</span>
         <button type="button" class="mini" id="selCancel">취소</button>
         <button type="button" class="danger" id="selDel" disabled>삭제</button>
+      </div>
+      <div class="trash" id="trashBox" hidden>
+        <h3>최근 삭제 <small>최근 3번까지 되돌릴 수 있어요</small></h3>
+        <ul class="list" id="trash"></ul>
       </div>
     </section>
   </section>
@@ -546,6 +553,7 @@ function render() {
 
 
   renderWorkouts();
+  renderTrash();
   renderRoutineSel();
   renderEquip(eqShown || $('#wf').ename.value.trim());
   updateHint();
@@ -638,20 +646,45 @@ function updateSelBar() {
 // 삭제하는 동안은 목록의 모든 삭제 버튼·체크를 잠근다 (행 번호가 바뀌는 중에 또 지우지 않게)
 function setDeleting(on) {
   deleting = on;
-  document.querySelectorAll('#wlist button, #wlist input, #selToggle, #selCancel').forEach(el => { el.disabled = on; });
+  document.querySelectorAll('#wlist button, #wlist input, #selToggle, #selCancel, #trash button').forEach(el => { el.disabled = on; });
   updateSelBar();
 }
 async function removeWorkouts(list) {
   setDeleting(true);
   if (selMode) $('#selDel').textContent = '삭제 중…';
   try {
-    const n = await call('deleteWorkouts', list.map(w => ({ row: w.row, date: w.date, name: w.name, setLabel: w.setLabel })));
-    toast(`${n}개 삭제했습니다`);
+    const r = await call('deleteWorkouts', list.map(w => ({ row: w.row, date: w.date, name: w.name, setLabel: w.setLabel })));
+    toast(r.saved ? `${r.n}개 삭제했습니다 · 아래 최근 삭제에서 되돌릴 수 있어요` : `${r.n}개 삭제했습니다 (너무 많아 되돌리기 목록에는 못 담았어요)`);
     selRows.clear(); selMode = false;
     await load();
   } catch (err) { toast('삭제 실패: ' + err.message); }
   setDeleting(false);
 }
+// 최근 삭제: 지운 묶음별로 무엇을 지웠는지 보여주고, 누르면 원래 자리로 되살린다
+function renderTrash() {
+  const t = D.trash || [];
+  $('#trashBox').hidden = !t.length;
+  $('#trash').innerHTML = t.map(x => {
+    const at = new Date(x.at), when = `${at.getMonth() + 1}/${at.getDate()} ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+    const names = [...new Set(x.items.map(i => i.name))];
+    const what = names.slice(0, 2).join(', ') + (names.length > 2 ? ` 외 ${names.length - 2}종목` : '');
+    const days = [...new Set(x.items.map(i => md(i.date)))].join(', ');
+    return `<li><div><div>${esc(what)} <span class="meta">${x.items.length}개</span></div>
+      <div class="meta">${days} 기록 · ${when}에 삭제</div></div>
+      <button type="button" class="mini" data-id="${esc(x.id)}"${deleting ? ' disabled' : ''}>되돌리기</button></li>`;
+  }).join('');
+}
+$('#trash').addEventListener('click', async e => {
+  const b = e.target.closest('[data-id]'); if (!b || deleting) return;
+  setDeleting(true); b.textContent = '되돌리는 중…';
+  try {
+    const n = await call('restoreWorkouts', b.dataset.id);
+    toast(`${n}개 되돌렸습니다`);
+    await load();
+  } catch (err) { toast('되돌리기 실패: ' + err.message); }
+  setDeleting(false); renderTrash();
+});
+
 $('#selToggle').addEventListener('click', () => { selMode = !selMode; selRows.clear(); renderWorkouts(); });
 $('#selCancel').addEventListener('click', () => { selMode = false; selRows.clear(); renderWorkouts(); });
 $('#selDel').addEventListener('click', e => {
