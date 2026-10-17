@@ -59,6 +59,11 @@
   input, select, button { font:inherit; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); width:100%; min-width:0; }
   button.primary { background:var(--accent); color:#fff; border:0; font-weight:600; cursor:pointer; }
   button.primary:disabled { opacity:.6; }
+  .combo { position:relative; }
+  .sugg { position:absolute; left:0; top:100%; z-index:5; width:max(100%, 260px); max-height:50vh; overflow:auto; margin:4px 0 0; padding:4px 0; list-style:none; background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.15); }
+  .sugg li { padding:10px 12px; cursor:pointer; }
+  .sugg li:hover { background:var(--bg); }
+  .sugg li small { display:block; color:var(--muted); font-size:12px; }
   .hint { font-size:13px; color:var(--muted); min-height:1.2em; }
   select.range { width:auto; padding:6px 8px; font-size:13px; }
   .tools { display:flex; gap:6px; align-items:center; }
@@ -130,7 +135,7 @@
       <h2>운동 기록하기 <small>웰니스 아카이브 › 운동기록 탭에 저장</small></h2>
       <form id="wf">
         <label>날짜<input type="date" name="date" required></label>
-        <label>기구<input name="ename" list="equip" placeholder="예: 레그프레스(원판)" autocomplete="off" required></label>
+        <div class="combo"><label>기구<input name="ename" placeholder="예: 레그프레스(원판)" autocomplete="off" required></label><ul class="sugg" id="sugg" hidden></ul></div>
         <label class="check full"><input type="checkbox" name="cardio" id="cardio"> 유산소 (세트 없이 시간·거리 기록)</label>
         <label data-mode="set">중량(kg)<input type="number" name="weight" inputmode="decimal" step="0.5"></label>
         <label data-mode="set">횟수<input type="number" name="reps" inputmode="numeric" min="0"></label>
@@ -143,7 +148,6 @@
         <div class="hint full" id="hint"></div>
         <button class="primary full" id="wsubmit">저장</button>
       </form>
-      <datalist id="equip"></datalist>
     </section>
     <section class="card">
       <h2>최근 운동</h2>
@@ -433,7 +437,6 @@ function render() {
   renderCal();
 
 
-  $('#equip').innerHTML = D.equipment.map(e => `<option value="${esc(e.name)}">`).join('');
   renderWorkouts();
   updateHint();
   renderMeasures();
@@ -516,6 +519,34 @@ $('#wf').ename.addEventListener('change', () => {
   updateHint();
 });
 $('#wf').ename.addEventListener('input', updateHint);
+
+// 기구 목록: 브라우저 기본 자동완성(datalist)은 안드로이드 한글 입력 중 선택이 안 먹어서 직접 그린다
+let suggItems = [];
+function renderSugg() {
+  const box = $('#sugg'), cur = $('#wf').ename.value.trim();
+  if (!D) { box.hidden = true; return; }
+  const q = cur.replace(/\s/g, '').toLowerCase();
+  suggItems = D.equipment
+    .filter(e => e.name.replace(/\s/g, '').toLowerCase().includes(q))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 40);
+  if (!suggItems.length || (suggItems.length === 1 && suggItems[0].name === cur)) { box.hidden = true; return; }
+  box.innerHTML = suggItems.map((e, i) => `<li data-i="${i}">${esc(e.name)}<small>${e.date ? md(e.date) : ''}${e.weight != null ? ` · ${e.weight}kg` : ''}${e.reps != null ? ` × ${e.reps}회` : ''}${e.cardio ? ' · 유산소' : ''}</small></li>`).join('');
+  box.hidden = false;
+}
+function pickSugg(i) {
+  const f = $('#wf'), e = suggItems[i]; if (!e) return;
+  f.ename.value = e.name;
+  $('#sugg').hidden = true;
+  f.ename.dispatchEvent(new Event('change'));
+  f.ename.blur();
+}
+$('#wf').ename.addEventListener('focus', renderSugg);
+$('#wf').ename.addEventListener('input', renderSugg);
+$('#wf').ename.addEventListener('blur', () => setTimeout(() => { $('#sugg').hidden = true; }, 150));
+$('#wf').ename.addEventListener('keydown', e => { if (e.key === 'Escape') $('#sugg').hidden = true; });
+$('#sugg').addEventListener('mousedown', e => e.preventDefault()); // 누르는 순간 입력칸이 포커스를 잃어 목록이 닫히지 않게
+$('#sugg').addEventListener('click', e => { const li = e.target.closest('li'); if (li) pickSugg(Number(li.dataset.i)); });
 $('#cardio').addEventListener('change', e => setMode(e.target.checked));
 
 $('#wf').addEventListener('submit', async e => {
