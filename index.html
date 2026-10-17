@@ -64,6 +64,13 @@
   .sugg li { padding:10px 12px; cursor:pointer; }
   .sugg li:hover { background:var(--bg); }
   .sugg li small { display:block; color:var(--muted); font-size:12px; }
+  .step { display:flex; gap:4px; }
+  .step button { width:44px; flex:none; padding:10px 0; font-size:18px; line-height:1; cursor:pointer; }
+  .step input { text-align:center; }
+  #rtimer { color:var(--accent); font-weight:600; }
+  ul.sets { list-style:none; margin:0; padding:8px 12px; background:var(--bg); border-radius:8px; font-size:13px; }
+  ul.sets li { padding:3px 0; }
+  ul.sets li b { display:inline-block; min-width:44px; }
   .hint { font-size:13px; color:var(--muted); min-height:1.2em; }
   select.range { width:auto; padding:6px 8px; font-size:13px; }
   .tools { display:flex; gap:6px; align-items:center; }
@@ -137,15 +144,16 @@
         <label>날짜<input type="date" name="date" required></label>
         <div class="combo"><label>기구<input name="ename" placeholder="예: 레그프레스(원판)" autocomplete="off" required></label><ul class="sugg" id="sugg" hidden></ul></div>
         <label class="check full"><input type="checkbox" name="cardio" id="cardio"> 유산소 (세트 없이 시간·거리 기록)</label>
-        <label data-mode="set">중량(kg)<input type="number" name="weight" inputmode="decimal" step="0.5"></label>
-        <label data-mode="set">횟수<input type="number" name="reps" inputmode="numeric" min="0"></label>
-        <label data-mode="set">여유횟수(RIR)<input type="number" name="rir" inputmode="numeric" min="0"></label>
-        <label data-mode="set">휴식(초)<input type="number" name="rest" inputmode="numeric" min="0" step="10"></label>
+        <label data-mode="set">중량(kg)<span class="step"><button type="button" data-step="-2.5">−</button><input type="number" name="weight" inputmode="decimal" step="0.5" min="0"><button type="button" data-step="2.5">+</button></span></label>
+        <label data-mode="set">횟수<span class="step"><button type="button" data-step="-1">−</button><input type="number" name="reps" inputmode="numeric" min="0"><button type="button" data-step="1">+</button></span></label>
+        <label data-mode="set">여유횟수(RIR)<span class="step"><button type="button" data-step="-1">−</button><input type="number" name="rir" inputmode="numeric" min="0"><button type="button" data-step="1">+</button></span></label>
+        <label data-mode="set">휴식(초) <span id="rtimer"></span><input type="number" name="rest" inputmode="numeric" min="0" step="10" placeholder="저장하면 자동"></label>
         <label data-mode="cardio" hidden>시간(분)<input type="number" name="cmin" inputmode="numeric" min="0"></label>
         <label data-mode="cardio" hidden>거리(km)<input type="number" name="ckm" inputmode="decimal" step="0.01" min="0"></label>
         <label data-mode="cardio" hidden>평균심박<input type="number" name="chr" inputmode="numeric" min="0"></label>
         <label class="full">특이사항<input name="note"></label>
         <div class="hint full" id="hint"></div>
+        <ul class="sets full" id="todaySets" hidden></ul>
         <button class="primary full" id="wsubmit">저장</button>
       </form>
     </section>
@@ -503,7 +511,34 @@ function updateHint() {
   if (e && e.date) txt += `${txt ? ' · ' : ''}지난 기록 ${md(e.date)}${e.weight != null ? ` ${e.weight}kg` : ''}${e.reps != null ? ` × ${e.reps}회` : ''}`;
   $('#hint').textContent = txt;
   $('#wsubmit').textContent = name && !cardio ? `${cnt}세트 저장` : '저장';
+  // 오늘 이 기구로 한 세트들
+  const sets = cardio ? [] : D.workouts.filter(w => w.date === f.date.value && w.name === name && w.setLabel).reverse();
+  $('#todaySets').innerHTML = sets.map(w => `<li><b>${esc(w.setLabel)}</b>${esc([w.weight != null && `${w.weight}kg`, w.reps != null && `${w.reps}회`, w.rir != null && `RIR ${w.rir}`, w.rest != null && `휴식 ${w.rest}초`].filter(Boolean).join(' · '))}</li>`).join('');
+  $('#todaySets').hidden = !sets.length;
+  tickRest();
 }
+
+// −/+ 버튼: 중량 2.5kg, 횟수·RIR 1씩
+$('#wf').addEventListener('click', e => {
+  const b = e.target.closest('[data-step]'); if (!b) return;
+  const inp = b.parentNode.querySelector('input');
+  inp.value = Math.max(0, Math.round(((parseFloat(inp.value) || 0) + Number(b.dataset.step)) * 2) / 2);
+});
+
+// 휴식 타이머: 세트를 저장한 순간부터 재고, 같은 기구 다음 세트를 저장할 때 휴식(초)로 들어간다
+// (세트 하는 시간도 조금 포함됨). 휴식 칸을 직접 고치면 그 값을 쓴다.
+let lastSet = null, restManual = false;
+try { lastSet = JSON.parse(localStorage.getItem('lastSet')); } catch (e) {}
+function tickRest() {
+  const f = $('#wf'), el = $('#rtimer');
+  const on = lastSet && !f.cardio.checked && lastSet.name === f.ename.value.trim() && Date.now() - lastSet.t < 15 * 60e3;
+  if (!on) { el.textContent = ''; if (!restManual) f.rest.value = ''; return; }
+  const s = Math.round((Date.now() - lastSet.t) / 1000);
+  el.textContent = `⏱ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  if (!restManual) f.rest.value = s;
+}
+setInterval(tickRest, 1000);
+$('#wf').rest.addEventListener('input', () => { restManual = true; });
 
 function setMode(cardio) {
   document.querySelectorAll('[data-mode]').forEach(el => { el.hidden = (el.dataset.mode === 'cardio') !== cardio; });
@@ -512,9 +547,10 @@ function setMode(cardio) {
 
 $('#wf').ename.addEventListener('change', () => {
   const f = $('#wf'), e = D && D.equipment.find(x => x.name === f.ename.value.trim());
+  restManual = false;
   if (e) {
     f.cardio.checked = !!e.cardio; setMode(!!e.cardio);
-    if (!e.cardio) { f.weight.value = e.weight ?? ''; f.reps.value = e.reps ?? ''; f.rir.value = e.rir ?? ''; f.rest.value = e.rest ?? ''; }
+    if (!e.cardio) { f.weight.value = e.weight ?? ''; f.reps.value = e.reps ?? ''; f.rir.value = e.rir ?? ''; }
   }
   updateHint();
 });
@@ -548,6 +584,7 @@ $('#wf').ename.addEventListener('keydown', e => { if (e.key === 'Escape') $('#su
 $('#sugg').addEventListener('mousedown', e => e.preventDefault()); // 누르는 순간 입력칸이 포커스를 잃어 목록이 닫히지 않게
 $('#sugg').addEventListener('click', e => { const li = e.target.closest('li'); if (li) pickSugg(Number(li.dataset.i)); });
 $('#cardio').addEventListener('change', e => setMode(e.target.checked));
+$('#wf').date.addEventListener('change', updateHint);
 
 $('#wf').addEventListener('submit', async e => {
   e.preventDefault();
@@ -565,8 +602,13 @@ $('#wf').addEventListener('submit', async e => {
   try {
     const r = await call('addWorkout', w);
     toast(`${w.name} ${r.setLabel || ''} 저장했습니다`);
-    // 같은 기구 다음 세트를 바로 입력할 수 있게 기구·중량·횟수는 남겨둔다
-    f.note.value = ''; f.cmin.value = ''; f.ckm.value = ''; f.chr.value = ''; f.rir.value = '';
+    // 같은 기구 다음 세트는 저장만 누르면 되게 기구·중량·횟수·RIR은 남겨두고 휴식 타이머를 시작한다
+    f.note.value = ''; f.cmin.value = ''; f.ckm.value = ''; f.chr.value = '';
+    if (!w.cardio) {
+      lastSet = { name: w.name, t: Date.now() };
+      try { localStorage.setItem('lastSet', JSON.stringify(lastSet)); } catch (e) {}
+    }
+    restManual = false; f.rest.value = '';
     await load();
   } catch (err) { toast('저장 실패: ' + err.message); }
   btn.disabled = false;
