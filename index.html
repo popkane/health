@@ -7,13 +7,18 @@
 <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111317" media="(prefers-color-scheme: dark)">
 <title>헬스 대시보드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root { --bg:#f6f7f9; --card:#fff; --fg:#1c1f24; --muted:#6b7280; --line:#e5e7eb; --accent:#2563eb; --accent2:#f59e0b; --accent3:#10b981; --good:#16a34a; --bad:#dc2626; }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#111317; --card:#1b1e24; --fg:#e8eaed; --muted:#9aa0a6; --line:#2d3139; --accent:#60a5fa; --accent2:#fbbf24; --accent3:#34d399; --good:#4ade80; --bad:#f87171; }
   }
-  :root { color-scheme:light dark; }
+  :root { color-scheme:light dark; --num:"Barlow Condensed", "Pretendard Variable", sans-serif;
+    --board:#18202b; --board-fg:#f4f7fb; --board-muted:#9aa8ba; --board-btn:#232d3b; --board-line:#34404f; }
+  @media (prefers-color-scheme: dark) { :root { --board:#202835; --board-btn:#2b3544; --board-line:#3c4859; } }
   * { box-sizing:border-box; }
   /* 빠르게 연타해도 두 번 톡 확대가 일어나지 않게 */
   button, input, select, label, summary { touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
@@ -74,6 +79,23 @@
   .step { display:flex; gap:4px; }
   .step button { width:44px; flex:none; padding:10px 0; font-size:18px; line-height:1; cursor:pointer; }
   .step input { text-align:center; }
+  /* 세트 입력판: 운동 중 멀리서 흘끗 봐도 읽히는 전광판 숫자. 앱에서 유일하게 튀는 곳 */
+  .board { background:var(--board); color:var(--board-fg); border-radius:14px; padding:14px 14px 12px; display:grid; gap:12px; }
+  .board .brow { display:flex; flex-direction:column; gap:4px; }
+  .board .bcap { font-size:13px; font-weight:600; color:var(--board-muted); flex-direction:row; gap:4px; align-items:baseline; }
+  .board .bcap small { font-weight:400; }
+  .board .step button { background:var(--board-btn); border-color:var(--board-line); color:var(--board-fg); }
+  .board .step button:active { background:var(--board-line); }
+  .board .step input { background:transparent; border-color:var(--board-line); color:var(--board-fg); font-family:var(--num); font-weight:600; font-size:24px; padding:4px; }
+  .board .step.big button { width:64px; height:64px; font-size:30px; border-radius:12px; }
+  .board .step.big input { border:0; font-size:56px; line-height:64px; height:64px; padding:0; letter-spacing:.01em; }
+  .board .step input::placeholder { color:var(--board-line); }
+  .board .bsmall { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding-top:10px; border-top:1px solid var(--board-line); }
+  .board .bsmall .step button { width:40px; }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+  input[type=number] { -moz-appearance:textfield; appearance:textfield; }
+  /* 저장 버튼은 입력판을 보는 동안 화면 아래에 붙어 있다 (폼 밖으로 스크롤하면 따라오지 않음) */
+  #wsubmit { position:sticky; bottom:calc(10px + env(safe-area-inset-bottom, 0px)); z-index:4; padding:15px; font-size:17px; box-shadow:0 0 0 6px var(--card); }
   .namerow { display:flex; gap:4px; }
   .fav { width:44px; flex:none; padding:0; font-size:20px; color:var(--accent2); cursor:pointer; }
   .pchips button[aria-pressed="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
@@ -122,7 +144,7 @@
   .login { position:fixed; inset:0; z-index:20; background:var(--bg); display:grid; place-items:center; padding:16px; }
   [hidden] { display:none !important; }
   .login .card { width:100%; max-width:360px; }
-  #toast { position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); background:var(--fg); color:var(--bg); padding:8px 14px; border-radius:8px; font-size:14px; z-index:10; }
+  #toast { position:fixed; left:50%; bottom:calc(84px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); background:var(--fg); color:var(--bg); padding:8px 14px; border-radius:8px; font-size:14px; z-index:10; }
 </style>
 </head>
 <body>
@@ -177,16 +199,32 @@
         <div class="picks full" id="picks"></div>
         <div class="combo full"><label>기구 <small>검색하거나 위에서 고르기</small><span class="namerow"><input name="ename" placeholder="예: 레그프레스(원판)" autocomplete="off" required><button type="button" id="fav" class="fav" aria-label="즐겨찾기">☆</button></span></label><ul class="sugg" id="sugg" hidden></ul></div>
         <label class="check full"><input type="checkbox" name="cardio" id="cardio"> 유산소 (세트 없이 시간·거리 기록)</label>
-        <label data-mode="set" for="w-weight">중량(kg)<span class="step"><button type="button" data-step="-2.5" aria-label="중량 2.5kg 빼기">−</button><input type="number" id="w-weight" name="weight" inputmode="decimal" step="0.5" min="0"><button type="button" data-step="2.5" aria-label="중량 2.5kg 더하기">+</button></span></label>
-        <label data-mode="set" for="w-reps">횟수<span class="step"><button type="button" data-step="-1" aria-label="횟수 1 빼기">−</button><input type="number" id="w-reps" name="reps" inputmode="numeric" min="0"><button type="button" data-step="1" aria-label="횟수 1 더하기">+</button></span></label>
-        <label data-mode="set" for="w-rir">여유횟수(RIR)<span class="step"><button type="button" data-step="-1" aria-label="RIR 1 빼기">−</button><input type="number" id="w-rir" name="rir" inputmode="numeric" min="0"><button type="button" data-step="1" aria-label="RIR 1 더하기">+</button></span></label>
-        <label data-mode="set" for="w-rest">휴식(초)<span class="step"><button type="button" data-step="-5" aria-label="휴식 5초 빼기">−</button><input type="number" id="w-rest" name="rest" inputmode="numeric" min="0" step="1"><button type="button" data-step="5" aria-label="휴식 5초 더하기">+</button></span></label>
+        <div class="board full" data-mode="set">
+          <div class="brow">
+            <label class="bcap" for="w-weight">중량 <small>kg</small></label>
+            <span class="step big"><button type="button" data-step="-2.5" aria-label="중량 2.5kg 빼기">−</button><input type="number" id="w-weight" name="weight" inputmode="decimal" step="0.5" min="0" placeholder="0"><button type="button" data-step="2.5" aria-label="중량 2.5kg 더하기">+</button></span>
+          </div>
+          <div class="brow">
+            <label class="bcap" for="w-reps">횟수 <small>회</small></label>
+            <span class="step big"><button type="button" data-step="-1" aria-label="횟수 1 빼기">−</button><input type="number" id="w-reps" name="reps" inputmode="numeric" min="0" placeholder="0"><button type="button" data-step="1" aria-label="횟수 1 더하기">+</button></span>
+          </div>
+          <div class="bsmall">
+            <div class="brow">
+              <label class="bcap" for="w-rir">여유횟수 <small>RIR</small></label>
+              <span class="step"><button type="button" data-step="-1" aria-label="RIR 1 빼기">−</button><input type="number" id="w-rir" name="rir" inputmode="numeric" min="0"><button type="button" data-step="1" aria-label="RIR 1 더하기">+</button></span>
+            </div>
+            <div class="brow">
+              <label class="bcap" for="w-rest">휴식 <small>초</small></label>
+              <span class="step"><button type="button" data-step="-5" aria-label="휴식 5초 빼기">−</button><input type="number" id="w-rest" name="rest" inputmode="numeric" min="0" step="1"><button type="button" data-step="5" aria-label="휴식 5초 더하기">+</button></span>
+            </div>
+          </div>
+        </div>
+        <div class="hint full" id="hint"></div>
+        <table class="cmp full" id="cmp" hidden></table>
         <label data-mode="cardio" hidden>시간(분)<input type="number" name="cmin" inputmode="numeric" min="0"></label>
         <label data-mode="cardio" hidden>거리(km)<input type="number" name="ckm" inputmode="decimal" step="0.01" min="0"></label>
         <label data-mode="cardio" hidden>평균심박<input type="number" name="chr" inputmode="numeric" min="0"></label>
         <label class="full">특이사항<input name="note"></label>
-        <div class="hint full" id="hint"></div>
-        <table class="cmp full" id="cmp" hidden></table>
         <button class="primary full" id="wsubmit">저장</button>
       </form>
     </section>
