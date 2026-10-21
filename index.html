@@ -182,6 +182,7 @@
       <button role="tab" data-tab="work" aria-selected="false">운동</button>
       <button role="tab" data-tab="body" aria-selected="false">실측 입력</button>
       <button role="tab" data-tab="goal" aria-selected="false">목표</button>
+      <button role="tab" data-tab="down" aria-selected="false">다운로드</button>
     </nav>
   </header>
 
@@ -237,6 +238,7 @@
         <div class="hint full" id="hint"></div>
         <table class="cmp full" id="cmp" hidden></table>
         <label data-mode="cardio" hidden>시간(분)<input type="number" name="cmin" inputmode="numeric" min="0"></label>
+        <label data-mode="cardio" hidden>초<select name="csec"><option value="0">0초</option><option value="10">10초</option><option value="20">20초</option><option value="30">30초</option><option value="40">40초</option><option value="50">50초</option></select></label>
         <label data-mode="cardio" hidden>거리(km)<input type="number" name="ckm" inputmode="decimal" step="0.01" min="0"></label>
         <label data-mode="cardio" hidden>평균심박<input type="number" name="chr" inputmode="numeric" min="0"></label>
         <label class="full">특이사항<input name="note"></label>
@@ -284,6 +286,16 @@
     <section class="card">
       <h2>입력한 실측값</h2>
       <ul class="list" id="mlist"></ul>
+    </section>
+  </section>
+
+  <!-- 다운로드 -->
+  <section id="tab-down" hidden>
+    <section class="card">
+      <h2>전체 데이터 다운로드 <small>분석용 JSON 파일 하나</small></h2>
+      <p class="note">아카이브 시트(일일데이터·운동기록·대시보드), 삼성헬스 기록(체성분·식단·소모 칼로리), 실측 입력, 목표, 전체 기간 계산값(추정치 포함)을 한 파일로 받습니다. 다운로드 폴더에 저장되니 Claude에게 "다운로드 폴더의 헬스 데이터 봐줘"라고 하면 됩니다.</p>
+      <button class="primary" id="dl" type="button">전체 데이터 다운로드</button>
+      <p class="note" id="dlinfo"></p>
     </section>
   </section>
 
@@ -378,7 +390,7 @@ function localToday() {
 }
 
 // ---------- 탭 ----------
-const TABS = ['dash', 'work', 'body', 'goal'];
+const TABS = ['dash', 'work', 'body', 'goal', 'down'];
 function showTab(name) {
   document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   TABS.forEach(t => { $('#tab-' + t).hidden = t !== name; });
@@ -901,7 +913,8 @@ $('#wf').addEventListener('submit', async e => {
   };
   if (w.cardio) {
     w.weight = w.reps = w.rir = w.rest = '';
-    const c = `${f.cmin.value ? f.cmin.value + '분' : ''}${f.ckm.value ? f.ckm.value + '키로' : ''}${f.chr.value ? ' 평균심박' + f.chr.value : ''}`.trim();
+    const sec = Number(f.csec.value) || 0, time = f.cmin.value || sec ? `${Number(f.cmin.value) || 0}분${sec ? sec + '초' : ''}` : '';
+    const c = `${time}${f.ckm.value ? f.ckm.value + '키로' : ''}${f.chr.value ? ' 평균심박' + f.chr.value : ''}`.trim();
     w.note = [c, w.note].filter(Boolean).join(' ');
   }
   busy(btn, true);
@@ -910,7 +923,7 @@ $('#wf').addEventListener('submit', async e => {
     const r = await call('addWorkout', w);
     toast(rec || `${w.name} ${r.setLabel || ''} 저장했습니다`);
     // 같은 기구 다음 세트는 저장만 누르면 되게 기구·중량·횟수·RIR·휴식은 남겨둔다
-    f.note.value = ''; f.cmin.value = ''; f.ckm.value = ''; f.chr.value = '';
+    f.note.value = ''; f.cmin.value = ''; f.csec.value = '0'; f.ckm.value = ''; f.chr.value = '';
     await load();
   } catch (err) { toast('저장 실패: ' + err.message); }
   busy(btn, false); updateHint();
@@ -1065,6 +1078,24 @@ $('#glist').addEventListener('click', async e => {
   btn.disabled = true;
   try { await call('deleteGoal', btn.dataset.date); toast('삭제했습니다'); goalFormFilled = false; await load(); }
   catch (err) { toast('삭제 실패: ' + err.message); btn.disabled = false; }
+});
+
+// ---------- 다운로드 ----------
+$('#dl').addEventListener('click', async () => {
+  const btn = $('#dl');
+  btn.disabled = true; btn.textContent = '모으는 중…';
+  try {
+    const data = await call('exportAll');
+    const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `health-data-${localToday()}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    $('#dlinfo').textContent = `${data.exportedAt} 기준 · 운동 ${data.workouts.length}행 · ${Math.round(blob.size / 1024).toLocaleString()}KB`;
+    toast('다운로드했습니다');
+  } catch (e) { toast('다운로드 실패: ' + e.message); }
+  btn.disabled = false; btn.textContent = '전체 데이터 다운로드';
 });
 
 // ---------- 시작 ----------
