@@ -632,10 +632,10 @@ function renderWorkouts() {
   [...selRows].forEach(r => { if (!rows.has(r)) selRows.delete(r); });
   $('#wlist').innerHTML = days.map(d => {
     const items = d.ex.flatMap(x => x.items.map(it => it.w));
-    const sets = items.filter(w => w.setLabel).length;
+    const sets = items.filter(w => w.set != null).length;
     const vol = Math.round(items.reduce((s, w) => s + (w.eff > 0 && w.reps > 0 ? w.eff * w.reps : 0), 0));
     const parts = (D.workoutCal[d.date] || []).join('·');
-    const line = w => `<span>${esc(w.setLabel ? `${w.setLabel} ${setTxt(w)}` : '유산소')}${w.note ? ` <span class="meta">${esc(w.note)}</span>` : ''}</span>`;
+    const line = w => `<span>${esc(w.set != null ? `${w.setLabel} ${setTxt(w)}` : '유산소')}${w.note ? ` <span class="meta">${esc(w.note)}</span>` : ''}</span>`;
     return `<details class="wday" data-date="${d.date}"${opened.has(d.date) ? ' open' : ''}><summary><b>${d.date.replace(/-/g, '.')} (${dow(d.date)})</b>
       <span class="meta">${parts} · ${d.ex.length}종목${sets ? ` ${sets}세트` : ''}${vol ? ` · ${vol.toLocaleString()}kg` : ''}</span></summary>` +
       (selMode ? `<button type="button" class="mini selday" data-date="${d.date}">이 날 전체 선택</button>` : '') +
@@ -782,7 +782,7 @@ $('#routine').addEventListener('change', e => {
 // 지난번 세트와 오늘 세트를 나란히 (오늘이 더 좋으면 ↑ 초록, 못하면 ↓ 빨강)
 function renderCmp(e, name, cardio) {
   const tb = $('#cmp'), d = $('#wf').date.value;
-  const today = cardio || !name ? [] : D.workouts.filter(w => w.date === d && w.name === name && w.setLabel).reverse();
+  const today = cardio || !name ? [] : D.workouts.filter(w => w.date === d && w.name === name && w.set != null).reverse();
   const prev = !cardio && e && e.prev && e.prev.date !== d ? e.prev.sets : [];
   const n = Math.max(today.length, prev.length);
   if (!n) { tb.hidden = true; return; }
