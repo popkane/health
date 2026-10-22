@@ -215,7 +215,8 @@
         <div class="chips pchips full" id="pchips"></div>
         <div class="picks full" id="picks"></div>
         <div class="combo full"><label>기구 <small>검색하거나 위에서 고르기</small><span class="namerow"><input name="ename" placeholder="예: 레그프레스(원판)" autocomplete="off" required><button type="button" id="fav" class="fav" aria-label="즐겨찾기">☆</button></span></label><ul class="sugg" id="sugg" hidden></ul></div>
-        <label class="check full"><input type="checkbox" name="cardio" id="cardio"> 유산소 (세트 없이 시간·거리 기록)</label>
+        <!-- 입력 방식은 부위 칩(유산소)이나 고른 기구로 정해진다. 체크박스는 상태 보관용으로 숨겨 둔다 -->
+        <label class="check full" hidden><input type="checkbox" name="cardio" id="cardio"> 유산소 (세트 없이 시간·거리 기록)</label>
         <div class="board full" data-mode="set">
           <div class="brow">
             <label class="bcap" for="w-weight">중량 <small>kg</small></label>
@@ -722,6 +723,8 @@ function renderPicks() {
   if (pchip === 'routine' && !routine) pchip = 'all';
   const chips = [routine && ['routine', `루틴 ${md(routine.date)}`], ['fav', '★ 즐겨찾기'], ['all', '최근'], ...['상체', '하체', '복근', '유산소'].map(p => [p, p])].filter(Boolean);
   $('#pchips').innerHTML = chips.map(([k, l]) => `<button type="button" data-k="${k}" aria-pressed="${k === pchip}">${l}</button>`).join('');
+  // 처음 열 때 지난번에 고른 칩(예: 유산소)에 맞춰 입력 방식을 맞춘다
+  if (!renderPicks.done) { renderPicks.done = true; chipMode(); }
   const byName = Object.fromEntries(D.equipment.map(e => [e.name, e]));
   if (pchip === 'routine') pickList = routine.names.map(n => byName[n] || { name: n });
   else if (pchip === 'fav') pickList = favs.map(n => byName[n] || { name: n });
@@ -747,7 +750,14 @@ function selectEquip(name) {
 $('#pchips').addEventListener('click', e => {
   const b = e.target.closest('[data-k]'); if (!b) return;
   pchip = b.dataset.k; store('pchip', pchip); renderPicks();
+  chipMode();
 });
+// 부위 칩으로 입력 방식 전환: 유산소 → 시간·거리, 상체·하체·복근 → 중량·횟수 (전체·즐겨찾기·루틴은 고른 기구를 따른다)
+function chipMode() {
+  if (!['상체', '하체', '복근', '유산소'].includes(pchip)) return;
+  const f = $('#wf'), cardio = pchip === '유산소';
+  if (f.cardio.checked !== cardio) { f.cardio.checked = cardio; setMode(cardio); }
+}
 $('#picks').addEventListener('click', e => {
   const b = e.target.closest('[data-i]'); if (b) selectEquip(pickList[Number(b.dataset.i)].name);
 });
