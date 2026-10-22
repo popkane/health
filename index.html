@@ -609,7 +609,7 @@ const setTxt = w => [w.weight != null && kg(w), w.reps != null && `${w.reps}회`
 const byRecent = (a, b) => (b.date || '').localeCompare(a.date || '');
 const store = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (e) {} };
 
-// 최근 운동: 날짜별로 접고 펼치기, 안에서는 기구별로 묶는다 (가장 최근 날만 펼쳐 둠)
+// 최근 운동: 날짜별로 접고 펼치기, 안에서는 기구별로 묶는다
 function renderWorkouts() {
   if (!D.workouts.length) { $('#wlist').innerHTML = '<p class="empty">이 기간에 운동 기록이 없습니다.</p>'; return; }
   const days = [];
@@ -622,7 +622,8 @@ function renderWorkouts() {
   });
   // 다시 그려도 펼쳐 둔 날은 그대로 (처음엔 가장 최근 날만)
   const opened = new Set([...document.querySelectorAll('#wlist details[open]')].map(el => el.dataset.date));
-  if (!document.querySelector('#wlist details')) opened.add(days[0].date);
+  // 처음 열 때는 오늘 기록만 펼친다 (지난 날은 접어 둔다)
+  if (!document.querySelector('#wlist details') && days[0].date === D.today) opened.add(days[0].date);
   const rows = new Set(D.workouts.map(w => w.row));
   [...selRows].forEach(r => { if (!rows.has(r)) selRows.delete(r); });
   $('#wlist').innerHTML = days.map(d => {
