@@ -58,6 +58,20 @@
   .cal .d.today { outline:2px solid var(--accent); outline-offset:-2px; }
   /* 부위 라벨: 흰 글자와 대비 4.5:1 이상인 진한 색 */
   .cal .p, .callegend .p { display:block; border-radius:4px; padding:1px 0; font-size:10.5px; font-weight:600; line-height:1.3; color:#fff; white-space:nowrap; overflow:hidden; }
+  .cal .p, .callegend .p { background:#475569; } /* 직접 추가한 탭 */
+  details.mng > summary { list-style:none; cursor:pointer; }
+  details.mng > summary::-webkit-details-marker { display:none; }
+  details.mng > summary h2 { margin:0; }
+  details.mng > summary h2::before { content:'▸ '; color:var(--muted); }
+  details.mng[open] > summary h2::before { content:'▾ '; }
+  details.mng h3 { font-size:13px; color:var(--muted); margin:16px 0 4px; }
+  .addrow { display:grid; grid-template-columns:1fr auto auto; gap:6px; margin:6px 0; }
+  .addrow button { width:auto; padding:10px 14px; }
+  .mng .row { display:flex; align-items:center; gap:6px; }
+  .mng .row > span { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .mng .row select { width:auto; padding:5px 6px; font-size:13px; }
+  .mng .row .mini { flex-shrink:0; }
+  .mng .gone > span { color:var(--muted); text-decoration:line-through; }
   .p.상체 { background:#1d4ed8; } .p.하체 { background:#c2410c; }
   .p.복근 { background:#7e22ce; } .p.유산소 { background:#15803d; }
   .callegend { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
@@ -190,7 +204,7 @@
   <!-- 대시보드 -->
   <section id="tab-dash">
     <div class="kpis" id="kpis"></div>
-    <section class="card"><h2><span class="calnav"><button type="button" id="calPrev" aria-label="이전 달">‹</button><span id="calTitle"></span><button type="button" id="calNext" aria-label="다음 달">›</button></span><small id="calCount"></small></h2><div class="cal" id="cal"></div><div class="callegend"><span class="p 상체">상체</span><span class="p 하체">하체</span><span class="p 복근">복근</span><span class="p 유산소">유산소</span></div></section>
+    <section class="card"><h2><span class="calnav"><button type="button" id="calPrev" aria-label="이전 달">‹</button><span id="calTitle"></span><button type="button" id="calNext" aria-label="다음 달">›</button></span><small id="calCount"></small></h2><div class="cal" id="cal"></div><div class="callegend" id="calLegend"></div></section>
     <div class="charts">
       <section class="card"><h2>체중 <small id="gW"></small></h2><div class="chart"><canvas id="cWeight"></canvas></div></section>
       <section class="card"><h2>골격근량 <small id="gM"></small></h2><div class="chart"><canvas id="cMuscle"></canvas></div></section>
@@ -208,7 +222,7 @@
   <!-- 운동 -->
   <section id="tab-work" hidden>
     <section class="card">
-      <h2>운동 기록하기 <small>웰니스 아카이브 › 운동기록 탭에 저장</small></h2>
+      <h2>운동 기록하기 <small>운동기록 탭에 저장</small></h2>
       <form id="wf">
         <label>날짜<input type="date" name="date" required></label>
         <label>루틴<select id="routine"></select></label>
@@ -266,6 +280,24 @@
         <ul class="list" id="trash"></ul>
       </div>
     </section>
+    <details class="card mng">
+      <summary><h2>탭 · 기구 관리 <small>탭 추가·삭제, 기구 추가·이름 바꾸기·탭 옮기기·삭제</small></h2></summary>
+      <h3>탭</h3>
+      <ul class="list" id="partList"></ul>
+      <form id="partForm" class="addrow">
+        <input name="pname" placeholder="새 탭 이름 (예: 전신)" required>
+        <select name="mode"><option value="">근력 (중량·횟수)</option><option value="1">유산소 (시간·거리)</option></select>
+        <button class="primary">추가</button>
+      </form>
+      <h3>기구</h3>
+      <form id="equipForm" class="addrow">
+        <input name="qname" placeholder="새 기구 이름" required>
+        <select name="qpart" id="equipPart"></select>
+        <button class="primary">추가</button>
+      </form>
+      <div id="equipList"></div>
+      <p class="note">삭제한 기구는 목록에서만 빠지고 운동 기록은 그대로 남습니다. 이름을 바꾸면 지난 기록의 기구 이름도 같이 바뀝니다.</p>
+    </details>
   </section>
 
   <!-- 골격근량·체수분 -->
@@ -564,6 +596,7 @@ function render() {
 
   renderWorkouts();
   renderTrash();
+  renderMng();
   renderRoutineSel();
   renderEquip(eqShown || $('#wf').ename.value.trim());
   updateHint();
@@ -588,9 +621,10 @@ function renderCal() {
     const key = `${calMonth}-${pad(d)}`, parts = cal[key] || [];
     if (parts.length) count++;
     html += `<div class="d${parts.length ? ' on' : ''}${key === D.today ? ' today' : ''}"><b>${d}</b>` +
-      parts.map(p => `<span class="p ${p}">${p}</span>`).join('') + '</div>';
+      parts.map(p => `<span class="p ${esc(p)}">${esc(p)}</span>`).join('') + '</div>';
   }
   $('#cal').innerHTML = html;
+  $('#calLegend').innerHTML = partNames().map(p => `<span class="p ${esc(p)}">${esc(p)}</span>`).join('');
   $('#calTitle').textContent = `${y}년 ${m}월`;
   $('#calCount').textContent = `운동 ${count}일`;
   $('#calNext').disabled = calMonth >= thisMonth;
@@ -721,14 +755,15 @@ function doneOn() {
 
 function renderPicks() {
   if (pchip === 'routine' && !routine) pchip = 'all';
-  const chips = [routine && ['routine', `루틴 ${md(routine.date)}`], ['fav', '★ 즐겨찾기'], ['all', '최근'], ...['상체', '하체', '복근', '유산소'].map(p => [p, p])].filter(Boolean);
+  if (!['routine', 'fav', 'all', ...partNames()].includes(pchip)) pchip = 'all';
+  const chips = [routine && ['routine', `루틴 ${md(routine.date)}`], ['fav', '★ 즐겨찾기'], ['all', '최근'], ...partNames().map(p => [p, p])].filter(Boolean);
   $('#pchips').innerHTML = chips.map(([k, l]) => `<button type="button" data-k="${k}" aria-pressed="${k === pchip}">${l}</button>`).join('');
   // 처음 열 때 지난번에 고른 칩(예: 유산소)에 맞춰 입력 방식을 맞춘다
   if (!renderPicks.done) { renderPicks.done = true; chipMode(); }
   const byName = Object.fromEntries(D.equipment.map(e => [e.name, e]));
   if (pchip === 'routine') pickList = routine.names.map(n => byName[n] || { name: n });
   else if (pchip === 'fav') pickList = favs.map(n => byName[n] || { name: n });
-  else pickList = D.equipment.filter(e => pchip === 'all' || e.part === pchip).sort(byRecent).slice(0, pchip === 'all' ? 12 : 40);
+  else pickList = D.equipment.filter(e => !e.hidden && (pchip === 'all' || e.part === pchip)).sort(byRecent).slice(0, pchip === 'all' ? 12 : 40);
   const cur = $('#wf').ename.value.trim(), done = doneOn();
   const next = pchip === 'routine' ? pickList.find(e => !done[e.name]) : null;
   $('#picks').innerHTML = pickList.length ? pickList.map((e, i) => {
@@ -752,10 +787,12 @@ $('#pchips').addEventListener('click', e => {
   pchip = b.dataset.k; store('pchip', pchip); renderPicks();
   chipMode();
 });
-// 부위 칩으로 입력 방식 전환: 유산소 → 시간·거리, 상체·하체·복근 → 중량·횟수 (전체·즐겨찾기·루틴은 고른 기구를 따른다)
+// 부위 칩으로 입력 방식 전환: 유산소형 탭 → 시간·거리, 근력형 탭 → 중량·횟수 (최근·즐겨찾기·루틴은 고른 기구를 따른다)
+const partNames = () => (D.parts || []).map(p => p.name);
 function chipMode() {
-  if (!['상체', '하체', '복근', '유산소'].includes(pchip)) return;
-  const f = $('#wf'), cardio = pchip === '유산소';
+  const p = (D.parts || []).find(x => x.name === pchip);
+  if (!p) return;
+  const f = $('#wf'), cardio = !!p.cardio;
   if (f.cardio.checked !== cardio) { f.cardio.checked = cardio; setMode(cardio); }
 }
 $('#picks').addEventListener('click', e => {
@@ -767,6 +804,85 @@ $('#fav').addEventListener('click', () => {
   favs = on ? [...favs, n] : favs.filter(x => x !== n);
   store('favs', favs); renderPicks();
   toast(on ? `★ ${n} 즐겨찾기에 추가` : `${n} 즐겨찾기에서 뺐습니다`);
+});
+
+// ---------- 탭 · 기구 관리 ----------
+function renderMng() {
+  const P = D.parts || [], opts = sel => P.map(p => `<option${p.name === sel ? ' selected' : ''}>${esc(p.name)}</option>`).join('');
+  const count = n => D.equipment.filter(e => !e.hidden && e.part === n).length;
+  $('#partList').innerHTML = P.map((p, i) => `<li class="row"><span>${esc(p.name)} <small class="meta">${p.cardio ? '유산소' : '근력'} · 기구 ${count(p.name)}</small></span>
+    <button type="button" class="mini" data-pmove="${i}" data-d="-1"${i ? '' : ' disabled'} aria-label="위로">▲</button>
+    <button type="button" class="mini" data-pmove="${i}" data-d="1"${i < P.length - 1 ? '' : ' disabled'} aria-label="아래로">▼</button>
+    <button type="button" class="del" data-pdel="${i}">삭제</button></li>`).join('');
+  const keep = $('#equipPart').value;
+  $('#equipPart').innerHTML = opts(keep || pchip);
+  // 탭별로 묶어서, 탭 안에서는 가나다순. 삭제한 기구는 맨 아래 '삭제한 기구'에
+  const byName = (a, b) => a.name.localeCompare(b.name, 'ko');
+  const row = (e, i) => `<li class="row${e.hidden ? ' gone' : ''}"><span>${esc(e.name)}</span>` + (e.hidden
+    ? `<button type="button" class="mini" data-eshow="${i}">되살리기</button>`
+    : `<select data-epart="${i}" aria-label="탭 옮기기">${opts(e.part)}</select><button type="button" class="mini" data-eren="${i}">이름</button><button type="button" class="del" data-edel="${i}">삭제</button>`) + '</li>';
+  const E = D.equipment, idx = e => E.indexOf(e);
+  const gone = E.filter(e => e.hidden).sort(byName);
+  $('#equipList').innerHTML = P.map(p => {
+    const list = E.filter(e => !e.hidden && e.part === p.name).sort(byName);
+    return list.length ? `<h3>${esc(p.name)}</h3><ul class="list">${list.map(e => row(e, idx(e))).join('')}</ul>` : '';
+  }).join('') + (gone.length ? `<h3>삭제한 기구</h3><ul class="list">${gone.map(e => row(e, idx(e))).join('')}</ul>` : '');
+}
+
+async function mngCall(fn, args, msg) {
+  try { await call(fn, ...args); if (msg) toast(msg); await load(); return true; }
+  catch (err) { toast('실패: ' + err.message); return false; }
+}
+const saveParts = (P, msg) => mngCall('saveParts', [P.map(p => ({ name: p.name, cardio: !!p.cardio }))], msg);
+
+$('#partForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target, name = f.pname.value.trim();
+  if (!name) return;
+  saveParts([...(D.parts || []), { name, cardio: f.mode.value === '1' }], `'${name}' 탭을 추가했습니다`).then(ok => ok && f.reset());
+});
+$('#partList').addEventListener('click', e => {
+  const P = (D.parts || []).slice(), mv = e.target.closest('[data-pmove]'), del = e.target.closest('[data-pdel]');
+  if (mv) {
+    const i = Number(mv.dataset.pmove), j = i + Number(mv.dataset.d);
+    [P[i], P[j]] = [P[j], P[i]];
+    saveParts(P);
+  } else if (del) {
+    if (del.dataset.confirm !== '1') { del.dataset.confirm = '1'; del.textContent = '정말 삭제'; return; }
+    const [p] = P.splice(Number(del.dataset.pdel), 1);
+    saveParts(P, `'${p.name}' 탭을 지웠습니다`);
+  }
+});
+
+$('#equipForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target, name = f.qname.value.trim();
+  if (!name) return;
+  const old = D.equipment.find(x => x.name === name);
+  if (old && !old.hidden) { toast(`'${name}'은(는) 이미 '${old.part}' 탭에 있습니다`); return; }
+  mngCall('saveEquip', [{ name, part: f.qpart.value }], `'${name}'을(를) ${f.qpart.value} 탭에 추가했습니다`).then(ok => { if (ok) f.qname.value = ''; });
+});
+$('#equipList').addEventListener('change', e => {
+  const s = e.target.closest('[data-epart]'); if (!s) return;
+  const eq = D.equipment[Number(s.dataset.epart)];
+  mngCall('saveEquip', [{ name: eq.name, part: s.value }], `${eq.name} → ${s.value} 탭`);
+});
+$('#equipList').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const eq = D.equipment[Number(b.dataset.eren ?? b.dataset.edel ?? b.dataset.eshow)];
+  if (!eq) return;
+  if ('eren' in b.dataset) {
+    const name = (prompt('새 이름 (지난 기록의 이름도 같이 바뀝니다)', eq.name) || '').trim();
+    if (!name || name === eq.name) return;
+    mngCall('saveEquip', [{ name, part: eq.part, oldName: eq.name }], `${eq.name} → ${name}`).then(ok => {
+      if (ok && favs.includes(eq.name)) { favs = favs.map(x => (x === eq.name ? name : x)); store('favs', favs); }
+    });
+  } else if ('edel' in b.dataset) {
+    if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = '정말 삭제'; return; }
+    mngCall('hideEquip', [eq.name, true], `${eq.name}을(를) 목록에서 뺐습니다`);
+  } else {
+    mngCall('hideEquip', [eq.name, false], `${eq.name}을(를) 되살렸습니다`);
+  }
 });
 
 // 루틴: 지난 운동한 날 하나를 골라 그날 한 기구 순서대로 따라간다 (오늘만 유지)
@@ -889,11 +1005,11 @@ function renderSugg() {
   if (!D) { box.hidden = true; return; }
   const q = cur.replace(/\s/g, '').toLowerCase();
   suggItems = D.equipment
-    .filter(e => e.name.replace(/\s/g, '').toLowerCase().includes(q))
+    .filter(e => !e.hidden && e.name.replace(/\s/g, '').toLowerCase().includes(q))
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     .slice(0, 40);
   if (!suggItems.length || (suggItems.length === 1 && suggItems[0].name === cur)) { box.hidden = true; return; }
-  box.innerHTML = suggItems.map((e, i) => `<li data-i="${i}">${esc(e.name)}<small>${e.date ? md(e.date) : ''}${e.weight != null ? ` · ${e.weight}kg` : ''}${e.reps != null ? ` × ${e.reps}회` : ''}${e.cardio ? ' · 유산소' : ''}</small></li>`).join('');
+  box.innerHTML = suggItems.map((e, i) => `<li data-i="${i}">${esc(e.name)}<small>${e.date ? md(e.date) : ''}${e.weight != null ? ` · ${e.weight}kg` : ''}${e.reps != null ? ` × ${e.reps}회` : ''} · ${esc(e.part)}</small></li>`).join('');
   box.hidden = false;
 }
 function pickSugg(i) {
