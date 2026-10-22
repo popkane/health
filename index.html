@@ -182,7 +182,6 @@
       <button role="tab" data-tab="work" aria-selected="false">운동</button>
       <button role="tab" data-tab="body" aria-selected="false">실측 입력</button>
       <button role="tab" data-tab="goal" aria-selected="false">목표</button>
-      <button role="tab" data-tab="down" aria-selected="false">다운로드</button>
     </nav>
   </header>
 
@@ -287,10 +286,6 @@
       <h2>입력한 실측값</h2>
       <ul class="list" id="mlist"></ul>
     </section>
-  </section>
-
-  <!-- 다운로드 -->
-  <section id="tab-down" hidden>
     <section class="card">
       <h2>전체 데이터 다운로드 <small>분석용 JSON 파일 하나</small></h2>
       <p class="note">아카이브 시트(일일데이터·운동기록·대시보드), 삼성헬스 기록(체성분·식단·소모 칼로리), 실측 입력, 목표, 전체 기간 계산값(추정치 포함)을 한 파일로 받습니다. 다운로드 폴더에 저장되니 Claude에게 "다운로드 폴더의 헬스 데이터 봐줘"라고 하면 됩니다.</p>
@@ -390,7 +385,7 @@ function localToday() {
 }
 
 // ---------- 탭 ----------
-const TABS = ['dash', 'work', 'body', 'goal', 'down'];
+const TABS = ['dash', 'work', 'body', 'goal'];
 function showTab(name) {
   document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   TABS.forEach(t => { $('#tab-' + t).hidden = t !== name; });
