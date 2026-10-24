@@ -144,6 +144,7 @@
   .del:disabled, .mini:disabled { opacity:.4; cursor:default; }
   .selday { margin:0 0 8px 16px; }
   details.wday .ex .ren { width:auto; padding:0 4px; margin-left:6px; border:0; background:none; color:var(--muted); font-size:12px; font-weight:400; text-decoration:underline; cursor:pointer; }
+  details.wday .ex .rensel { display:block; width:100%; margin:4px 0; font-weight:400; font-size:14px; }
   label.check.pick { font-size:13px; gap:10px; padding:2px 0; }
   label.check.pick input { width:20px; height:20px; flex:none; margin:0; }
   .selbar { position:sticky; bottom:calc(10px + env(safe-area-inset-bottom, 0px)); display:flex; align-items:center; gap:8px; margin-top:12px; padding:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.12); }
@@ -1058,12 +1059,25 @@ $('#wlist').addEventListener('click', e => {
   if (deleting) return;
   const ren = e.target.closest('.ren');
   if (ren) {
+    // 버튼 자리에 저장된 기구 목록(탭별로 묶음)을 띄워서 고르게 한다
     const { date, name } = ren.dataset;
-    const to = (prompt(`${md(date)} ${name} 기록을 어떤 기구로 바꿀까요?`, '') || '').trim();
-    if (!to || to === name) return;
-    call('renameWorkoutsOn', date, name, to)
-      .then(n => { toast(`${name} ${n}개 → ${to}`); return load(); })
-      .catch(err => toast('바꾸기 실패: ' + err.message));
+    const groups = (D.parts || []).map(p => {
+      const list = D.equipment.filter(x => !x.hidden && x.part === p.name && x.name !== name).map(x => x.name).sort((a, b) => a.localeCompare(b, 'ko'));
+      return list.length ? `<optgroup label="${esc(p.name)}">${list.map(n => `<option>${esc(n)}</option>`).join('')}</optgroup>` : '';
+    }).join('');
+    const s = document.createElement('select');
+    s.className = 'rensel';
+    s.innerHTML = `<option value="">어떤 기구로 바꿀까요? (취소)</option>${groups}`;
+    ren.replaceWith(s);
+    s.focus();
+    s.addEventListener('change', () => {
+      const to = s.value;
+      if (!to) { renderWorkouts(); return; }
+      s.disabled = true;
+      call('renameWorkoutsOn', date, name, to)
+        .then(n => { toast(`${name} ${n}개 → ${to}`); return load(); })
+        .catch(err => { toast('바꾸기 실패: ' + err.message); renderWorkouts(); });
+    });
     return;
   }
   const all = e.target.closest('.selday');
