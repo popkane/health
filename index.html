@@ -143,6 +143,7 @@
   .mini { width:auto; padding:6px 10px; font-size:13px; cursor:pointer; }
   .del:disabled, .mini:disabled { opacity:.4; cursor:default; }
   .selday { margin:0 0 8px 16px; }
+  details.wday .ex .ren { width:auto; padding:0 4px; margin-left:6px; border:0; background:none; color:var(--muted); font-size:12px; font-weight:400; text-decoration:underline; cursor:pointer; }
   label.check.pick { font-size:13px; gap:10px; padding:2px 0; }
   label.check.pick input { width:20px; height:20px; flex:none; margin:0; }
   .selbar { position:sticky; bottom:calc(10px + env(safe-area-inset-bottom, 0px)); display:flex; align-items:center; gap:8px; margin-top:12px; padding:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.12); }
@@ -672,7 +673,7 @@ function renderWorkouts() {
     return `<details class="wday" data-date="${d.date}"${opened.has(d.date) ? ' open' : ''}><summary><b>${d.date.replace(/-/g, '.')} (${dow(d.date)})</b>
       <span class="meta">${parts} · ${d.ex.length}종목${sets ? ` ${sets}세트` : ''}${vol ? ` · ${vol.toLocaleString()}kg` : ''}</span></summary>` +
       (selMode ? `<button type="button" class="mini selday" data-date="${d.date}">이 날 전체 선택</button>` : '') +
-      d.ex.slice().reverse().map(x => `<div class="ex"><div>${esc(x.name)}</div><ul class="list">` + x.items.map(({ w, i }) => selMode
+      d.ex.slice().reverse().map(x => `<div class="ex"><div>${esc(x.name)}${selMode ? '' : ` <button type="button" class="ren" data-date="${d.date}" data-name="${esc(x.name)}">기구 바꾸기</button>`}</div><ul class="list">` + x.items.map(({ w, i }) => selMode
         ? `<li><label class="check pick"><input type="checkbox" data-row="${w.row}"${selRows.has(w.row) ? ' checked' : ''}>${line(w)}</label></li>`
         : `<li>${line(w)}<button class="del" data-i="${i}">삭제</button></li>`).join('') + '</ul></div>').join('') + '</details>';
   }).join('');
@@ -1055,6 +1056,16 @@ $('#wf').addEventListener('submit', async e => {
 
 $('#wlist').addEventListener('click', e => {
   if (deleting) return;
+  const ren = e.target.closest('.ren');
+  if (ren) {
+    const { date, name } = ren.dataset;
+    const to = (prompt(`${md(date)} ${name} 기록을 어떤 기구로 바꿀까요?`, '') || '').trim();
+    if (!to || to === name) return;
+    call('renameWorkoutsOn', date, name, to)
+      .then(n => { toast(`${name} ${n}개 → ${to}`); return load(); })
+      .catch(err => toast('바꾸기 실패: ' + err.message));
+    return;
+  }
   const all = e.target.closest('.selday');
   if (all) {
     const rows = D.workouts.filter(w => w.date === all.dataset.date).map(w => w.row);
