@@ -905,7 +905,7 @@ $('#routine').addEventListener('change', e => {
   }
 });
 
-// 지난번 세트와 오늘 세트를 나란히 (오늘이 더 좋으면 ↑ 초록, 못하면 ↓ 빨강)
+// 지난번 세트와 오늘 세트를 나란히
 function renderCmp(e, name, cardio) {
   const tb = $('#cmp'), d = $('#wf').date.value;
   const today = cardio || !name ? [] : D.workouts.filter(w => w.date === d && w.name === name && w.set != null).reverse();
@@ -913,13 +913,8 @@ function renderCmp(e, name, cardio) {
   const n = Math.max(today.length, prev.length);
   if (!n) { tb.hidden = true; return; }
   const cell = s => (s ? `${s.weight != null ? kg(s) : '–kg'} × ${s.reps ?? '–'}${s.rir != null ? ` <small>R${s.rir}</small>` : ''}` : '');
-  const score = s => (s.eff ?? s.weight ?? 0) * (1 + (s.reps || 0) / 30);
   let h = `<tr><th>세트</th><th>지난번${prev.length ? ' ' + md(e.prev.date) : ''}</th><th>오늘</th></tr>`;
-  for (let i = 0; i < n; i++) {
-    const p = prev[i], t = today[i];
-    const cls = p && t ? (score(t) > score(p) + 1e-9 ? 'up' : score(t) < score(p) - 1e-9 ? 'down' : '') : '';
-    h += `<tr><td>${i + 1}</td><td>${cell(p)}</td><td class="${cls}">${cell(t)}${cls === 'up' ? ' ↑' : cls === 'down' ? ' ↓' : ''}</td></tr>`;
-  }
+  for (let i = 0; i < n; i++) h += `<tr><td>${i + 1}</td><td>${cell(prev[i])}</td><td>${cell(today[i])}</td></tr>`;
   tb.innerHTML = h; tb.hidden = false;
 }
 
